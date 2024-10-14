@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Map Editor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <button id="editModeButton">編集モード: OFF</button>
+
+  <div id="tools" style="display: none;">
+    <button id="selectTool">選択</button>
+    <button id="pointTool">ポイント</button>
+    <button id="lineTool">ライン</button>
+    <button id="polygonTool">ポリゴン</button>
+  </div>
+
+  <button id="saveButton">保存</button>
+  <button id="loadButton">読み込み</button>
+
+  <div id="tooltip"></div>
+
+  <div id="detailWindow" style="display: none;">
+    <h3 id="detailName"></h3>
+    <p id="detailDescription"></p>
+    <button id="closeDetailButton">閉じる</button>
+  </div>
+
+  <!-- ポイント編集フォーム -->
+  <div id="editForm" style="display: none;">
+    <label for="pointName">名前:</label>
+    <input type="text" id="pointName"><br>
+    <label for="pointDescription">説明:</label>
+    <textarea id="pointDescription"></textarea><br>
+    <button id="savePointButton">保存</button>
+    <button id="cancelEditButton">キャンセル</button>
+    <button id="deletePointButton">削除</button>
+  </div>
+
+  <!-- 線編集フォーム -->
+  <div id="lineEditForm" style="display: none;">
+    <label for="lineName">名前:</label>
+    <input type="text" id="lineName"><br>
+    <label for="lineDescription">説明:</label>
+    <textarea id="lineDescription"></textarea><br>
+    <button id="saveLineButton">保存</button>
+    <button id="cancelLineEditButton">キャンセル</button>
+    <button id="deleteLineButton">削除</button>
+  </div>
+
+  <!-- 面編集フォーム -->
+  <div id="polygonEditForm" style="display: none;">
+    <label for="polygonName">名前:</label>
+    <input type="text" id="polygonName"><br>
+    <label for="polygonDescription">説明:</label>
+    <textarea id="polygonDescription"></textarea><br>
+    <button id="savePolygonButton">保存</button>
+    <button id="cancelPolygonEditButton">キャンセル</button>
+    <button id="deletePolygonButton">削除</button>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="renderer.js"></script>
+</body>
+
+</html>
