@@ -173,6 +173,8 @@ const EventHandlers = (() => {
                         // ユーザーが「はい」を選択した場合のみ、ファイル選択ダイアログを表示
                         ipcRenderer.send('load-data');
                     }
+                }).catch((error) => {
+                    console.error('確認ダイアログの表示中にエラーが発生しました:', error);
                 });
             } else {
                 // 既存のデータがない場合は、直接ファイル選択ダイアログを表示
