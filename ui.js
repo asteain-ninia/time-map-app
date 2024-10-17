@@ -15,6 +15,11 @@ const UI = (() => {
             button.classList.toggle('active', button.id === `${State.currentTool}Tool`);
         });
 
+        // 確定ボタンの表示/非表示
+        console.log(State.isEditMode);
+        console.log(State.isDrawing);
+        document.getElementById('drawControls').style.display = (State.isEditMode && State.isDrawing) ? 'block' : 'none';
+
         if (!State.isEditMode) {
             hideAllForms();
         }

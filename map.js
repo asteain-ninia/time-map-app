@@ -74,12 +74,15 @@ const MapModule = (() => {
     }
 
     function renderData() {
+        // 既存のデータと一時的な描画を削除
         zoomGroup.selectAll('.data-group').remove();
+        zoomGroup.selectAll('.tempLine').remove();  // 一時的な線を削除
+        zoomGroup.selectAll('.tempPolygon').remove();  // 一時的な面を削除
 
         const dataGroup = zoomGroup.append('g')
             .attr('class', 'data-group');
 
-        const mapCopies = [-1, 0, 1, 2];
+        const mapCopies = [-1, 0, 1];
 
         mapCopies.forEach(offset => {
             const offsetX = offset * mapWidth;

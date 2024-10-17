@@ -59,3 +59,15 @@ ipcMain.on('load-data', (event) => {
         }
     });
 });
+
+ipcMain.handle('show-confirm-dialog', async (event, { message }) => {
+    const result = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['はい', 'いいえ'],
+        defaultId: 0,
+        cancelId: 1,
+        title: '確認',
+        message: message,
+    });
+    return result.response === 0; // 'はい' が選択された場合のみ true を返す
+});

@@ -27,4 +27,21 @@ const EventHandlers = require('./eventHandlers');
     }
 
     init();
+
+    ipcRenderer.on('load-data-reply', (event, data) => {
+        if (data) {
+            // 既存のデータをクリア
+            DataStore.getPoints().length = 0;
+            DataStore.getLines().length = 0;
+            DataStore.getPolygons().length = 0;
+
+            // 新しいデータを追加
+            DataStore.getPoints().push(...(data.points || []));
+            DataStore.getLines().push(...(data.lines || []));
+            DataStore.getPolygons().push(...(data.polygons || []));
+            renderData();
+        } else {
+            UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+        }
+    });
 })();
