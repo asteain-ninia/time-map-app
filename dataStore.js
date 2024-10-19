@@ -1,9 +1,42 @@
 // dataStore.js
 
 const DataStore = (() => {
-    const points = [];
-    const lines = [];
-    const polygons = [];
+    let points = [];
+    let lines = [];
+    let polygons = [];
+
+    function addPoint(point) {
+        points.push(point);
+    }
+
+    function getPoints(year) {
+        return points.filter(point => point.year <= year);
+    }
+
+    function updatePoint(updatedPoint) {
+        const index = points.findIndex(point => point.id === updatedPoint.id);
+        if (index !== -1) {
+            points[index] = updatedPoint;
+        }
+    }
+
+    // ラインとポリゴンについても同様にyearでフィルタリングする関数に変更
+    function getLines(year) {
+        return lines.filter(line => line.year <= year);
+    }
+
+    function getPolygons(year) {
+        return polygons.filter(polygon => polygon.year <= year);
+    }
+
+    // 追加時にyearプロパティを設定
+    function addLine(line) {
+        lines.push(line);
+    }
+
+    function addPolygon(polygon) {
+        polygons.push(polygon);
+    }
 
     return {
         getPoints: () => points,

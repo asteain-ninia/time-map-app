@@ -104,3 +104,23 @@ button.active {
 #drawControls button {
     margin-left: 5px;
 }
+
+#timeSliderContainer {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+#timeSlider {
+    width: 300px;
+}
+
+#currentYear {
+    margin-left: 10px;
+    font-weight: bold;
+}

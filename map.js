@@ -82,6 +82,7 @@ const MapModule = (() => {
         const dataGroup = zoomGroup.append('g')
             .attr('class', 'data-group');
 
+        const currentYear = State.currentYear || 0;
         const mapCopies = [-1, 0, 1];
 
         mapCopies.forEach(offset => {
@@ -89,7 +90,7 @@ const MapModule = (() => {
 
             // ポイントの描画
             dataGroup.selectAll(`.point-${offset}`)
-                .data(DataStore.getPoints(), d => d.id)
+                .data(DataStore.getPoints(currentYear), d => d.id)
                 .join(
                     enter => enter.append('circle')
                         .attr('class', `point-${offset}`)
@@ -116,7 +117,7 @@ const MapModule = (() => {
 
             // 線の描画
             dataGroup.selectAll(`.line-${offset}`)
-                .data(DataStore.getLines(), d => d.id)
+                .data(DataStore.getLines(currentYear), d => d.id)
                 .join(
                     enter => enter.append('path')
                         .attr('class', `line line-${offset}`)
@@ -158,7 +159,7 @@ const MapModule = (() => {
 
             // 面の描画
             dataGroup.selectAll(`.polygon-${offset}`)
-                .data(DataStore.getPolygons(), d => d.id)
+                .data(DataStore.getPolygons(currentYear), d => d.id)
                 .join(
                     enter => enter.append('path')
                         .attr('class', `polygon polygon-${offset}`)

@@ -59,6 +59,7 @@ const EventHandlers = (() => {
                             x: finalX,
                             y: scaledY,
                             description: '',
+                            year: State.currentYear || 0, // 年次情報を追加
                         };
                         DataStore.addPoint(newPoint);
                         renderData();
@@ -95,6 +96,7 @@ const EventHandlers = (() => {
                             name: '新しい線',
                             points: State.tempLinePoints.slice(),
                             description: '',
+                            year: State.currentYear || 0, // 年次情報を追加
                         };
                         DataStore.addLine(newLine);
                         State.isDrawing = false;
@@ -107,6 +109,7 @@ const EventHandlers = (() => {
                             name: '新しい面',
                             points: State.tempPolygonPoints.slice(),
                             description: '',
+                            year: State.currentYear || 0, // 年次情報を追加
                         };
                         DataStore.addPolygon(newPolygon);
                         State.isDrawing = false;
@@ -129,6 +132,7 @@ const EventHandlers = (() => {
                         name: '新しい線',
                         points: State.tempLinePoints.slice(),
                         description: '',
+                        year: State.currentYear || 0, // 年次情報を追加
                     };
                     DataStore.addLine(newLine);
                     State.isDrawing = false;
@@ -141,6 +145,7 @@ const EventHandlers = (() => {
                         name: '新しい面',
                         points: State.tempPolygonPoints.slice(),
                         description: '',
+                        year: State.currentYear || 0, // 年次情報を追加
                     };
                     DataStore.addPolygon(newPolygon);
                     State.isDrawing = false;
@@ -151,6 +156,16 @@ const EventHandlers = (() => {
                     UI.showNotification('ポイントが足りません。', 'error');
                 }
             }
+        });
+
+        // スライダーのイベントリスナーを追加
+        const timeSlider = document.getElementById('timeSlider');
+        const currentYearDisplay = document.getElementById('currentYear');
+
+        timeSlider.addEventListener('input', () => {
+            State.currentYear = parseInt(timeSlider.value, 10);
+            currentYearDisplay.textContent = `年: ${State.currentYear}`;
+            renderData();
         });
 
         // 保存・読み込みボタンのイベントリスナーや、IPC通信の設定
