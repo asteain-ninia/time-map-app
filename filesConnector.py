@@ -8,12 +8,18 @@ import glob
 extensions = ['.js', '.html', 'md', 'json', 'css']  # ここに複数の拡張子を追加できる
 output_file = 'combined_file.txt'  # 出力するファイル名
 
+# 無視したいファイル名のリスト
+ignore_files = ['package.json', 'package-lock.json']  # ここに無視したいファイル名を追加
+
 # 結合するファイルを開く
 with open(output_file, 'w', encoding='utf-8') as outfile:
     # 現在のディレクトリ内の全ファイルをチェック
     for ext in extensions:
         # 拡張子に一致するファイルを取得
         for filename in glob.glob(f'*{ext}'):
+            # 無視するファイル名の場合はスキップ
+            if filename in ignore_files:
+                continue
             with open(filename, 'r', encoding='utf-8') as infile:
                 # ファイルの内容を読み取って出力ファイルに書き込む
                 outfile.write(infile.read())
