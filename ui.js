@@ -89,44 +89,100 @@ const UI = (() => {
     function showEditForm(point, DataStore, renderData, State) {
         const form = document.getElementById('editForm');
         form.style.display = 'block';
-        document.getElementById('pointName').value = point.name || '';
-        document.getElementById('pointDescription').value = point.description || '';
-        document.getElementById('pointYear').value = State.currentYear || 0;
-
         makeDraggable(form);
+
+        const currentYear = State.currentYear || 0;
+
+        if (!point) {
+            // 新規ポイントの場合、デフォルト値を設定
+            document.getElementById('pointName').value = '新しいポイント';
+            document.getElementById('pointDescription').value = '';
+            document.getElementById('pointYear').value = currentYear;
+        } else {
+            // 既存ポイントの場合、現在の年に対応するプロパティを取得
+            const properties = getPropertiesForYear(point.properties, currentYear);
+
+            document.getElementById('pointName').value = properties.name || '';
+            document.getElementById('pointDescription').value = properties.description || '';
+            document.getElementById('pointYear').value = currentYear;
+        }
 
         document.getElementById('savePointButton').onclick = () => {
             const name = document.getElementById('pointName').value;
             const description = document.getElementById('pointDescription').value;
             const year = parseInt(document.getElementById('pointYear').value, 10);
 
-            if (!point.properties) {
-                point.properties = [];
+            if (!point) {
+                // 新規ポイントの追加
+                const newPoint = {
+                    id: Date.now(),
+                    x: State.tempPoint.x,
+                    y: State.tempPoint.y,
+                    properties: [
+                        {
+                            year: year,
+                            name: name || '新しいポイント',
+                            description: description || '',
+                        }
+                    ],
+                };
+                DataStore.addPoint(newPoint);
+            } else {
+                // 既存ポイントの更新
+                if (!point.properties) {
+                    point.properties = [];
+                }
+
+                point.properties.push({
+                    year: year,
+                    name: name,
+                    description: description,
+                });
+                DataStore.updatePoint(point);
             }
 
-            point.properties.push({
-                year: year,
-                name: name,
-                description: description,
-            });
-
-            DataStore.updatePoint(point);
+            // 描画モードを終了し、仮のポイントをクリア
+            State.isDrawing = false;
+            State.tempPoint = null;
             renderData();
             form.style.display = 'none';
         };
 
         document.getElementById('cancelEditButton').onclick = () => {
             form.style.display = 'none';
+            // 描画をキャンセル
+            State.isDrawing = false;
+            State.tempPoint = null;
+            renderData();
         };
 
         document.getElementById('deletePointButton').onclick = () => {
-            DataStore.removePoint(point.id);
+            if (point) {
+                DataStore.removePoint(point.id);
+            }
+            State.isDrawing = false;
+            State.tempPoint = null;
             renderData();
             form.style.display = 'none';
         };
     }
 
-    function showLineEditForm(line, DataStore, renderData, State) {
+    // ヘルパー関数を追加
+    function getPropertiesForYear(propertiesArray, year) {
+        if (!propertiesArray || propertiesArray.length === 0) return {};
+        const sortedProperties = propertiesArray.slice().sort((a, b) => a.year - b.year);
+        let currentProperties = {};
+        for (const prop of sortedProperties) {
+            if (prop.year <= year) {
+                currentProperties = prop;
+            } else {
+                break;
+            }
+        }
+        return currentProperties;
+    }
+
+    function showLineEditForm(line, DataStore, renderData, State, isNewLine = false) {
         const form = document.getElementById('lineEditForm');
         form.style.display = 'block';
         document.getElementById('lineName').value = line.name || '';
@@ -151,22 +207,36 @@ const UI = (() => {
             });
 
             DataStore.updateLine(line);
+            State.isDrawing = false;
+            State.tempLinePoints = [];
+            State.tempPoint = null; // 仮のポイントをクリア
             renderData();
             form.style.display = 'none';
         };
 
         document.getElementById('cancelLineEditButton').onclick = () => {
             form.style.display = 'none';
+            // 描画をキャンセル
+            State.isDrawing = false;
+            State.tempLinePoints = [];
+            State.tempPoint = null; // 仮のポイントをクリア
+            // 追加した線を削除（新規の場合のみ）
+            if (isNewLine) {
+                DataStore.removeLine(line.id);
+            }
+            renderData();
         };
 
         document.getElementById('deleteLineButton').onclick = () => {
             DataStore.removeLine(line.id);
+            State.isDrawing = false;
+            State.tempLinePoints = [];
             renderData();
             form.style.display = 'none';
         };
     }
 
-    function showPolygonEditForm(polygon, DataStore, renderData, State) {
+    function showPolygonEditForm(polygon, DataStore, renderData, State, isNewPolygon = false) {
         const form = document.getElementById('polygonEditForm');
         form.style.display = 'block';
         document.getElementById('polygonName').value = polygon.name || '';
@@ -191,16 +261,30 @@ const UI = (() => {
             });
 
             DataStore.updatePolygon(polygon);
+            State.isDrawing = false;
+            State.tempPolygonPoints = [];
+            State.tempPoint = null; // 仮のポイントをクリア
             renderData();
             form.style.display = 'none';
         };
 
         document.getElementById('cancelPolygonEditButton').onclick = () => {
             form.style.display = 'none';
+            // 描画をキャンセル
+            State.isDrawing = false;
+            State.tempPolygonPoints = [];
+            State.tempPoint = null; // 仮のポイントをクリア
+            // 追加した面を削除（新規の場合のみ）
+            if (isNewPolygon) {
+                DataStore.removePolygon(polygon.id);
+            }
+            renderData();
         };
 
         document.getElementById('deletePolygonButton').onclick = () => {
             DataStore.removePolygon(polygon.id);
+            State.isDrawing = false;
+            State.tempPolygonPoints = [];
             renderData();
             form.style.display = 'none';
         };

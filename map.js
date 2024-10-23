@@ -95,6 +95,14 @@ const MapModule = (() => {
         mapCopies.forEach(offset => {
             const offsetX = offset * mapWidth;
 
+            // 仮のポイントの描画
+            if (State.tempPoint) {
+                drawTemporaryPoint();
+            } else {
+                // 仮のポイントがない場合、既存の仮ポイントを削除
+                zoomGroup.selectAll('.tempPoint').remove();
+            }
+
             // ポイントの描画
             dataGroup.selectAll(`.point-${offset}`)
                 .data(DataStore.getPoints(currentYear), d => d.id)
@@ -209,14 +217,47 @@ const MapModule = (() => {
                 );
         });
 
-        // 仮の線と面の描画
+        // 仮の線と面、ポイントの描画
         if (State.isDrawing) {
             if (State.currentTool === 'line') {
                 drawTemporaryLine();
             } else if (State.currentTool === 'polygon') {
                 drawTemporaryPolygon();
             }
+            drawTemporaryPoint(); // 常に仮のポイントを描画
+        } else if (State.currentTool === 'point' && State.tempPoint) {
+            drawTemporaryPoint();
         }
+    }
+
+    function drawTemporaryPoint() {
+        zoomGroup.selectAll('.tempPoint').remove();
+
+        const mapCopies = [-1, 0, 1, 2];
+
+        // 現在のツールに応じて、一時的なポイントを取得
+        let tempPoints = [];
+        if (State.currentTool === 'line' && State.tempLinePoints.length > 0) {
+            tempPoints = [State.tempLinePoints[State.tempLinePoints.length - 1]];
+        } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length > 0) {
+            tempPoints = [State.tempPolygonPoints[State.tempPolygonPoints.length - 1]];
+        } else if (State.currentTool === 'point' && State.tempPoint) {
+            tempPoints = [State.tempPoint];
+        }
+
+        mapCopies.forEach(offset => {
+            const offsetX = offset * mapWidth;
+
+            zoomGroup.selectAll(`.tempPoint-${offset}`)
+                .data(tempPoints)
+                .enter()
+                .append('circle')
+                .attr('class', `tempPoint tempPoint-${offset}`)
+                .attr('cx', d => d.x + offsetX)
+                .attr('cy', d => d.y)
+                .attr('r', 5)
+                .attr('fill', 'orange');
+        });
     }
 
     function drawTemporaryLine() {

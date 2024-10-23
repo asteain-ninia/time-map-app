@@ -64,6 +64,9 @@ const DataStore = (() => {
 
     // 新しいポイントを追加
     function addPoint(point) {
+        if (!point.properties) {
+            point.properties = [];
+        }
         points.push(point);
     }
 
