@@ -35,93 +35,109 @@ const EventHandlers = (() => {
             State.currentTool = 'polygon';
             UI.updateUI(State);
         });
+        console.log("イベント追加開始")
+        console.log(d3.select('#map').selectAll("svg"))
 
+        initialize()
         // 地図上のクリックイベント
-        document.addEventListener('DOMContentLoaded', () => {
+        function initialize() {
+            console.log("イベントリスナーを設定します");
+
             const svg = d3.select('#map svg');
-            svg.on('click', (event) => {
-                if (State.isEditMode) {
-                    const [x, y] = d3.pointer(event);
-                    const transform = d3.zoomTransform(svg.node());
-                    const scaledX = (x - transform.x) / transform.k;
-                    const scaledY = (y - transform.y) / transform.k;
+            if (!svg.empty()) {
+                svg.on('click', (event) => {
+                    console.log("SVG がクリックされました");
+                    if (State.isEditMode) {
+                        const [x, y] = d3.pointer(event);
+                        const transform = d3.zoomTransform(svg.node());
+                        const scaledX = (x - transform.x) / transform.k;
+                        const scaledY = (y - transform.y) / transform.k;
 
-                    const mapWidth = MapModule.getMapWidth();
-                    const offsetXValue = Math.floor(scaledX / mapWidth) * mapWidth;
-                    const adjustedX = scaledX % mapWidth;
-                    const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
-                    const finalX = correctedX + offsetXValue;
+                        const mapWidth = MapModule.getMapWidth();
+                        const offsetXValue = Math.floor(scaledX / mapWidth) * mapWidth;
+                        const adjustedX = scaledX % mapWidth;
+                        const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
+                        const finalX = correctedX + offsetXValue;
 
-                    if (State.currentTool === 'point') {
-                        const newPoint = {
-                            id: Date.now(),
-                            name: '新しいポイント',
-                            x: finalX,
-                            y: scaledY,
-                            description: '',
-                            year: State.currentYear || 0, // 年次情報を追加
-                        };
-                        DataStore.addPoint(newPoint);
-                        renderData();
-                        UI.showEditForm(newPoint, DataStore, renderData);
-                    } else if (State.currentTool === 'line') {
-                        UI.updateUI(State);
-                        if (!State.isDrawing) {
-                            State.isDrawing = true;
-                            State.tempLinePoints = [{ x: finalX, y: scaledY }];
-                        } else {
-                            State.tempLinePoints.push({ x: finalX, y: scaledY });
+                        if (State.currentTool === 'point') {
+                            const newPoint = {
+                                id: Date.now(),
+                                name: '新しいポイント',
+                                x: finalX,
+                                y: scaledY,
+                                description: '',
+                                year: State.currentYear || 0,
+                            };
+                            DataStore.addPoint(newPoint);
+                            renderData();
+                            UI.showEditForm(newPoint, DataStore, renderData, State);
+                        } else if (State.currentTool === 'line') {
+                            UI.updateUI(State);
+                            if (!State.isDrawing) {
+                                State.isDrawing = true;
+                                State.tempLinePoints = [{ x: finalX, y: scaledY }];
+                            } else {
+                                State.tempLinePoints.push({ x: finalX, y: scaledY })
+                            }
+                            renderData();
+                        } else if (State.currentTool === 'polygon') {
+                            UI.updateUI(State);
+                            if (!State.isDrawing) {
+                                State.isDrawing = true;
+                                State.tempPolygonPoints = [{ x: finalX, y: scaledY }];
+                            } else {
+                                State.tempPolygonPoints.push({ x: finalX, y: scaledY });
+                            }
+                            renderData();
                         }
-                        renderData();
-                    } else if (State.currentTool === 'polygon') {
-                        UI.updateUI(State);
-                        if (!State.isDrawing) {
-                            State.isDrawing = true;
-                            State.tempPolygonPoints = [{ x: finalX, y: scaledY }];
-                        } else {
-                            State.tempPolygonPoints.push({ x: finalX, y: scaledY });
-                        }
-                        renderData();
                     }
-                }
-            });
+                });
 
-            // ダブルクリックで線や面の描画を完了
-            svg.on('dblclick.zoom', null);
-            svg.on('dblclick', (event) => {
-                if (State.isEditMode && State.isDrawing) {
-                    if (State.currentTool === 'line' && State.tempLinePoints.length >= 2) {
-                        const newLine = {
-                            id: Date.now(),
-                            name: '新しい線',
-                            points: State.tempLinePoints.slice(),
-                            description: '',
-                            year: State.currentYear || 0, // 年次情報を追加
-                        };
-                        DataStore.addLine(newLine);
-                        State.isDrawing = false;
-                        State.tempLinePoints = [];
-                        renderData();
-                        UI.showLineEditForm(newLine, DataStore, renderData);
-                    } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length >= 3) {
-                        const newPolygon = {
-                            id: Date.now(),
-                            name: '新しい面',
-                            points: State.tempPolygonPoints.slice(),
-                            description: '',
-                            year: State.currentYear || 0, // 年次情報を追加
-                        };
-                        DataStore.addPolygon(newPolygon);
-                        State.isDrawing = false;
-                        State.tempPolygonPoints = [];
-                        renderData();
-                        UI.showPolygonEditForm(newPolygon, DataStore, renderData);
-                    } else {
-                        UI.showNotification('ポイントが足りません。', 'error');
+                // ダブルクリックで線や面の描画を完了
+                svg.on('dblclick.zoom', null);
+                svg.on('dblclick', (event) => {
+                    if (State.isEditMode && State.isDrawing) {
+                        if (State.currentTool === 'line' && State.tempLinePoints.length >= 2) {
+                            const newLine = {
+                                id: Date.now(),
+                                name: '新しい線',
+                                points: State.tempLinePoints.slice(),
+                                description: '',
+                                year: State.currentYear || 0,
+                            };
+                            DataStore.addLine(newLine);
+                            State.isDrawing = false;
+                            State.tempLinePoints = [];
+                            renderData();
+                            UI.showLineEditForm(newLine, DataStore, renderData, State);
+                        } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length >= 3) {
+                            const newPolygon = {
+                                id: Date.now(),
+                                name: '新しい面',
+                                points: State.tempPolygonPoints.slice(),
+                                description: '',
+                                year: State.currentYear || 0,
+                            };
+                            DataStore.addPolygon(newPolygon);
+                            State.isDrawing = false;
+                            State.tempPolygonPoints = [];
+                            renderData();
+                            UI.showPolygonEditForm(newPolygon, DataStore, renderData, State);
+                        } else {
+                            UI.showNotification('ポイントが足りません。', 'error');
+                        }
                     }
-                }
-            });
-        });
+                });
+            } else {
+                console.error('SVG 要素が見つかりません');
+            }
+
+            // ドキュメントの状態を確認して、適切に処理を実行
+            if (document.readyState === 'loading') {
+                // まだ読み込み中の場合は、DOMContentLoaded イベントを待つ
+                document.addEventListener('DOMContentLoaded', initialize);
+            }
+        }
 
         // 確定ボタンのイベントリスナー
         document.getElementById('confirmDrawButton').addEventListener('click', () => {
@@ -138,7 +154,7 @@ const EventHandlers = (() => {
                     State.isDrawing = false;
                     State.tempLinePoints = [];
                     renderData();
-                    UI.showLineEditForm(newLine, DataStore, renderData);
+                    UI.showLineEditForm(newLine, DataStore, renderData, State);
                 } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length >= 3) {
                     const newPolygon = {
                         id: Date.now(),
@@ -151,7 +167,7 @@ const EventHandlers = (() => {
                     State.isDrawing = false;
                     State.tempPolygonPoints = [];
                     renderData();
-                    UI.showPolygonEditForm(newPolygon, DataStore, renderData);
+                    UI.showPolygonEditForm(newPolygon, DataStore, renderData, State);
                 } else {
                     UI.showNotification('ポイントが足りません。', 'error');
                 }

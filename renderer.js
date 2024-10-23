@@ -14,19 +14,30 @@ const EventHandlers = require('./eventHandlers');
         isDrawing: false,
         tempLinePoints: [],
         tempPolygonPoints: [],
+        currentYear: 0,
     };
 
     function renderData() {
         MapModule.renderData();
+        UI.updateEventList(DataStore, State);
     }
 
     function init() {
         UI.updateUI(State);
-        EventHandlers.setupEventListeners(State, DataStore, MapModule, UI, ipcRenderer, renderData);
-        MapModule.loadMap(State, DataStore, UI, renderData);
+        MapModule.loadMap(State, DataStore, UI, renderData)
+            .then(() => {
+                // Map のロードが完了した後にイベントリスナーを設定
+                EventHandlers.setupEventListeners(State, DataStore, MapModule, UI, ipcRenderer, renderData);
+            })
+            .catch((error) => {
+                console.error('Map のロード中にエラーが発生しました:', error);
+            });
     }
 
-    init();
+    // window.onload  イベント内で init 関数を呼び出す
+    window.onload = () => {
+        init();
+    };
 
     ipcRenderer.on('load-data-reply', (event, data) => {
         if (data) {

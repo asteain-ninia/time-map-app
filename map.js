@@ -14,62 +14,69 @@ const MapModule = (() => {
     let UI;
 
     function loadMap(_State, _DataStore, _UI, renderData) {
-        State = _State;
-        DataStore = _DataStore;
-        UI = _UI;
+        return new Promise((resolve, reject) => {
+            State = _State;
+            DataStore = _DataStore;
+            UI = _UI;
 
-        svg = d3.select('#map')
-            .append('svg')
-            .attr('width', '100%')
-            .attr('height', '100%');
+            svg = d3.select('#map')
+                .append('svg')
+                .attr('width', '100%')
+                .attr('height', '100%');
+            console.log("SVG読み込みOK")
+            zoomGroup = svg.append('g');
 
-        zoomGroup = svg.append('g');
+            const zoom = d3.zoom()
+                .scaleExtent([1, 50])
+                .on('zoom', (event) => {
+                    const { x, y, k } = event.transform;
 
-        const zoom = d3.zoom()
-            .scaleExtent([1, 50])
-            .on('zoom', (event) => {
-                const { x, y, k } = event.transform;
+                    let dx = ((x % (mapWidth * k)) + (mapWidth * k)) % (mapWidth * k);
 
-                let dx = ((x % (mapWidth * k)) + (mapWidth * k)) % (mapWidth * k);
+                    const minY = - (mapHeight * (k - 1));
+                    const maxY = 0;
+                    let dy = Math.max(Math.min(y, maxY), minY);
 
-                const minY = - (mapHeight * (k - 1));
-                const maxY = 0;
-                let dy = Math.max(Math.min(y, maxY), minY);
+                    zoomGroup.attr('transform', `translate(${dx}, ${dy}) scale(${k})`);
+                });
 
-                zoomGroup.attr('transform', `translate(${dx}, ${dy}) scale(${k})`);
-            });
+            svg.call(zoom);
 
-        svg.call(zoom);
+            d3.xml(path.join(__dirname, 'map.svg')).then((xml) => {
+                const mapSvg = xml.documentElement;
 
-        d3.xml(path.join(__dirname, 'map.svg')).then((xml) => {
-            const mapSvg = xml.documentElement;
-
-            const viewBox = mapSvg.getAttribute('viewBox');
-            if (viewBox) {
-                const viewBoxValues = viewBox.split(' ').map(Number);
-                if (viewBoxValues.length === 4) {
-                    mapWidth = viewBoxValues[2];
-                    mapHeight = viewBoxValues[3];
+                const viewBox = mapSvg.getAttribute('viewBox');
+                if (viewBox) {
+                    const viewBoxValues = viewBox.split(' ').map(Number);
+                    if (viewBoxValues.length === 4) {
+                        mapWidth = viewBoxValues[2];
+                        mapHeight = viewBoxValues[3];
+                    }
+                } else {
+                    mapWidth = parseFloat(mapSvg.getAttribute('width')) || mapWidth;
+                    mapHeight = parseFloat(mapSvg.getAttribute('height')) || mapHeight;
                 }
-            } else {
-                mapWidth = parseFloat(mapSvg.getAttribute('width')) || mapWidth;
-                mapHeight = parseFloat(mapSvg.getAttribute('height')) || mapHeight;
-            }
 
-            for (let i = -1; i <= 2; i++) {
-                const mapClone = mapSvg.cloneNode(true);
-                const mapGroup = zoomGroup.append('g')
-                    .attr('transform', `translate(${i * mapWidth}, 0)`);
-                mapGroup.node().appendChild(mapClone);
-            }
+                for (let i = -1; i <= 2; i++) {
+                    const mapClone = mapSvg.cloneNode(true);
+                    const mapGroup = zoomGroup.append('g')
+                        .attr('transform', `translate(${i * mapWidth}, 0)`);
+                    mapGroup.node().appendChild(mapClone);
+                }
 
-            svg.attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
-                .attr('preserveAspectRatio', 'xMidYMid meet');
+                svg.attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
+                    .attr('preserveAspectRatio', 'xMidYMid meet');
 
-            renderData();
-        }).catch((error) => {
-            console.error('SVGファイルの読み込みエラー:', error);
-            UI.showNotification('地図の読み込み中にエラーが発生しました。', 'error');
+                renderData();
+
+                // 成功時に resolve を呼び出す
+                resolve();
+            }).catch((error) => {
+                console.error('SVGファイルの読み込みエラー:', error);
+                UI.showNotification('地図の読み込み中にエラーが発生しました。', 'error');
+                // エラー時に reject を呼び出す
+                reject(error);
+            });
         });
     }
 
@@ -104,7 +111,7 @@ const MapModule = (() => {
                         .on('click', (event, d) => {
                             event.stopPropagation();
                             if (State.isEditMode) {
-                                UI.showEditForm(d, DataStore, renderData);
+                                UI.showEditForm(d, DataStore, renderData, State);
                             } else {
                                 UI.showDetailWindow(d);
                             }
@@ -115,7 +122,7 @@ const MapModule = (() => {
                     exit => exit.remove()
                 );
 
-            // 線の描画
+            // ラインの描画
             dataGroup.selectAll(`.line-${offset}`)
                 .data(DataStore.getLines(currentYear), d => d.id)
                 .join(
@@ -139,7 +146,7 @@ const MapModule = (() => {
                         .on('click', (event, d) => {
                             event.stopPropagation();
                             if (State.isEditMode) {
-                                UI.showLineEditForm(d, DataStore, renderData);
+                                UI.showLineEditForm(d, DataStore, renderData, State);
                             } else {
                                 UI.showDetailWindow(d);
                             }
@@ -157,7 +164,7 @@ const MapModule = (() => {
                     exit => exit.remove()
                 );
 
-            // 面の描画
+            // ポリゴンの描画
             dataGroup.selectAll(`.polygon-${offset}`)
                 .data(DataStore.getPolygons(currentYear), d => d.id)
                 .join(
@@ -182,7 +189,7 @@ const MapModule = (() => {
                         .on('click', (event, d) => {
                             event.stopPropagation();
                             if (State.isEditMode) {
-                                UI.showPolygonEditForm(d, DataStore, renderData);
+                                UI.showPolygonEditForm(d, DataStore, renderData, State);
                             } else {
                                 UI.showDetailWindow(d);
                             }

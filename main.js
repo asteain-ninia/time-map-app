@@ -4,8 +4,10 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+let mainWindow;
+
 function createWindow() {
-    const win = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
         webPreferences: {
@@ -14,18 +16,18 @@ function createWindow() {
         },
     });
 
-    win.loadFile('index.html');
+    mainWindow.loadFile('index.html');
 }
 
 app.whenReady().then(createWindow);
 
 ipcMain.on('save-data', (event, data) => {
-    dialog.showSaveDialog({
+    dialog.showSaveDialog(mainWindow, {
         title: 'データを保存',
         defaultPath: 'data.json',
         filters: [{ name: 'JSON Files', extensions: ['json'] }],
     }).then((result) => {
-        if (!result.canceled) {
+        if (!result.canceled && result.filePath) {
             fs.writeFile(result.filePath, JSON.stringify(data, null, 2), (err) => {
                 if (err) {
                     console.error('データの保存中にエラーが発生しました:', err);
@@ -37,11 +39,14 @@ ipcMain.on('save-data', (event, data) => {
         } else {
             event.reply('save-data-reply', false);
         }
+    }).catch((err) => {
+        console.error('データの保存中にエラーが発生しました:', err);
+        event.reply('save-data-reply', false);
     });
 });
 
 ipcMain.on('load-data', (event) => {
-    dialog.showOpenDialog({
+    dialog.showOpenDialog(mainWindow, {
         title: 'データを開く',
         filters: [{ name: 'JSON Files', extensions: ['json'] }],
     }).then((result) => {
@@ -57,11 +62,14 @@ ipcMain.on('load-data', (event) => {
         } else {
             event.reply('load-data-reply', null);
         }
+    }).catch((err) => {
+        console.error('データの読み込み中にエラーが発生しました:', err);
+        event.reply('load-data-reply', null);
     });
 });
 
 ipcMain.handle('show-confirm-dialog', async (event, { message }) => {
-    const result = await dialog.showMessageBox({
+    const result = await dialog.showMessageBox(mainWindow, {
         type: 'question',
         buttons: ['はい', 'いいえ'],
         defaultId: 0,
