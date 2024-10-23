@@ -105,7 +105,7 @@ const MapModule = (() => {
                         .attr('cy', d => d.y)
                         .attr('r', 5)
                         .attr('fill', 'red')
-                        .on('mouseover', UI.showTooltip)
+                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
                         .on('mousemove', UI.moveTooltip)
                         .on('mouseout', UI.hideTooltip)
                         .on('click', (event, d) => {
@@ -140,7 +140,7 @@ const MapModule = (() => {
                         .attr('stroke', 'blue')
                         .attr('stroke-width', 2)
                         .attr('fill', 'none')
-                        .on('mouseover', UI.showTooltip)
+                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
                         .on('mousemove', UI.moveTooltip)
                         .on('mouseout', UI.hideTooltip)
                         .on('click', (event, d) => {
@@ -183,7 +183,7 @@ const MapModule = (() => {
                         .attr('stroke', 'green')
                         .attr('stroke-width', 2)
                         .attr('fill', 'rgba(0, 255, 0, 0.3)')
-                        .on('mouseover', UI.showTooltip)
+                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
                         .on('mousemove', UI.moveTooltip)
                         .on('mouseout', UI.hideTooltip)
                         .on('click', (event, d) => {

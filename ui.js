@@ -25,7 +25,7 @@ const UI = (() => {
         }
     }
 
-    function showTooltip(event, d) {
+    function showTooltip(event, d, State) {
         tooltip.style('display', 'block')
             .html(`名前: ${d.name}<br>年: ${State.currentYear}`);
     }
