@@ -1,5 +1,7 @@
 // ui.js
 
+const { getPropertiesForYear } = require('./utils');
+
 const UI = (() => {
     const tooltip = d3.select('#tooltip');
 
@@ -167,20 +169,6 @@ const UI = (() => {
         };
     }
 
-    // ヘルパー関数を追加
-    function getPropertiesForYear(propertiesArray, year) {
-        if (!propertiesArray || propertiesArray.length === 0) return {};
-        const sortedProperties = propertiesArray.slice().sort((a, b) => a.year - b.year);
-        let currentProperties = {};
-        for (const prop of sortedProperties) {
-            if (prop.year <= year) {
-                currentProperties = prop;
-            } else {
-                break;
-            }
-        }
-        return currentProperties;
-    }
 
     function showLineEditForm(line, DataStore, renderData, State, isNewLine = false) {
         const form = document.getElementById('lineEditForm');

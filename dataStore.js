@@ -1,5 +1,7 @@
 // dataStore.js
 
+const { getPropertiesForYear } = require('./utils');
+
 const DataStore = (() => {
     let points = [];
     let lines = [];
@@ -45,21 +47,6 @@ const DataStore = (() => {
                 }
             })
             .filter(polygon => polygon !== null);
-    }
-
-    // 指定された年のプロパティを取得
-    function getPropertiesForYear(propertiesArray, year) {
-        if (!propertiesArray || propertiesArray.length === 0) return null;
-        const sortedProperties = propertiesArray.sort((a, b) => a.year - b.year);
-        let currentProperties = null;
-        for (const prop of sortedProperties) {
-            if (prop.year <= year) {
-                currentProperties = prop;
-            } else {
-                break;
-            }
-        }
-        return currentProperties;
     }
 
     // 新しいポイントを追加
