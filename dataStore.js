@@ -3,13 +3,13 @@
 const { getPropertiesForYear } = require('./utils');
 
 const DataStore = (() => {
-    let points = [];
-    let lines = [];
-    let polygons = [];
+    const points = new Map();
+    const lines = new Map();
+    const polygons = new Map();
 
     // 年次に応じたポイントの取得
     function getPoints(year) {
-        return points
+        return Array.from(points.values())
             .map(point => {
                 const properties = getPropertiesForYear(point.properties, year);
                 if (properties) {
@@ -23,7 +23,7 @@ const DataStore = (() => {
 
     // 年次に応じたラインの取得
     function getLines(year) {
-        return lines
+        return Array.from(lines.values())
             .map(line => {
                 const properties = getPropertiesForYear(line.properties, year);
                 if (properties) {
@@ -37,7 +37,7 @@ const DataStore = (() => {
 
     // 年次に応じたポリゴンの取得
     function getPolygons(year) {
-        return polygons
+        return Array.from(polygons.values())
             .map(polygon => {
                 const properties = getPropertiesForYear(polygon.properties, year);
                 if (properties) {
@@ -49,70 +49,90 @@ const DataStore = (() => {
             .filter(polygon => polygon !== null);
     }
 
+    // 全ポイントの取得（保存・読み込み用）
+    function getAllPoints() {
+        return Array.from(points.values());
+    }
+
+    // 全ラインの取得（保存・読み込み用）
+    function getAllLines() {
+        return Array.from(lines.values());
+    }
+
+    // 全ポリゴンの取得（保存・読み込み用）
+    function getAllPolygons() {
+        return Array.from(polygons.values());
+    }
+
     // 新しいポイントを追加
     function addPoint(point) {
         if (!point.properties) {
             point.properties = [];
         }
-        points.push(point);
+        points.set(point.id, point);
     }
 
     // ポイントを更新（新しいプロパティを追加）
     function updatePoint(updatedPoint) {
-        const index = points.findIndex(point => point.id === updatedPoint.id);
-        if (index !== -1) {
-            points[index] = updatedPoint;
+        if (points.has(updatedPoint.id)) {
+            points.set(updatedPoint.id, updatedPoint);
         }
     }
 
     // 新しいラインを追加
     function addLine(line) {
-        lines.push(line);
+        lines.set(line.id, line);
     }
 
     // ラインを更新
     function updateLine(updatedLine) {
-        const index = lines.findIndex(line => line.id === updatedLine.id);
-        if (index !== -1) {
-            lines[index] = updatedLine;
+        if (lines.has(updatedLine.id)) {
+            lines.set(updatedLine.id, updatedLine);
         }
     }
 
     // 新しいポリゴンを追加
     function addPolygon(polygon) {
-        polygons.push(polygon);
+        polygons.set(polygon.id, polygon);
     }
 
     // ポリゴンを更新
     function updatePolygon(updatedPolygon) {
-        const index = polygons.findIndex(polygon => polygon.id === updatedPolygon.id);
-        if (index !== -1) {
-            polygons[index] = updatedPolygon;
+        if (polygons.has(updatedPolygon.id)) {
+            polygons.set(updatedPolygon.id, updatedPolygon);
         }
     }
 
     // ポイントを削除
     function removePoint(id) {
-        const index = points.findIndex(point => point.id === id);
-        if (index !== -1) points.splice(index, 1);
+        points.delete(id);
     }
 
     // ラインを削除
     function removeLine(id) {
-        const index = lines.findIndex(line => line.id === id);
-        if (index !== -1) lines.splice(index, 1);
+        lines.delete(id);
     }
 
     // ポリゴンを削除
     function removePolygon(id) {
-        const index = polygons.findIndex(polygon => polygon.id === id);
-        if (index !== -1) polygons.splice(index, 1);
+        polygons.delete(id);
+    }
+
+    // データをクリア（読み込み時などに使用）
+    function clearData() {
+        points.clear();
+        lines.clear();
+        polygons.clear();
     }
 
     return {
         getPoints,
         getLines,
         getPolygons,
+
+        getAllPoints,
+        getAllLines,
+        getAllPolygons,
 
         addPoint,
         addLine,
@@ -125,6 +145,8 @@ const DataStore = (() => {
         removePoint,
         removeLine,
         removePolygon,
+
+        clearData,
     };
 })();
 

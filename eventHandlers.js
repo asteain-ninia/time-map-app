@@ -97,8 +97,7 @@ const EventHandlers = (() => {
                             id: Date.now(),
                             name: '新しい線',
                             points: State.tempLinePoints.slice(),
-                            description: '',
-                            year: State.currentYear || 0,
+                            properties: [],
                         };
                         DataStore.addLine(newLine);
                         State.isDrawing = false;
@@ -110,8 +109,7 @@ const EventHandlers = (() => {
                             id: Date.now(),
                             name: '新しい面',
                             points: State.tempPolygonPoints.slice(),
-                            description: '',
-                            year: State.currentYear || 0,
+                            properties: [],
                         };
                         DataStore.addPolygon(newPolygon);
                         State.isDrawing = false;
@@ -135,8 +133,7 @@ const EventHandlers = (() => {
                         id: Date.now(),
                         name: '新しい線',
                         points: State.tempLinePoints.slice(),
-                        description: '',
-                        year: State.currentYear || 0,
+                        properties: [],
                     };
                     DataStore.addLine(newLine);
                     renderData();
@@ -146,8 +143,7 @@ const EventHandlers = (() => {
                         id: Date.now(),
                         name: '新しい面',
                         points: State.tempPolygonPoints.slice(),
-                        description: '',
-                        year: State.currentYear || 0,
+                        properties: [],
                     };
                     DataStore.addPolygon(newPolygon);
                     renderData();
@@ -171,26 +167,33 @@ const EventHandlers = (() => {
         // 保存・読み込みボタンのイベントリスナーや、IPC通信の設定
         document.getElementById('saveButton').addEventListener('click', () => {
             const dataToSave = {
-                points: DataStore.getPoints(),
-                lines: DataStore.getLines(),
-                polygons: DataStore.getPolygons(),
+                points: DataStore.getAllPoints(),
+                lines: DataStore.getAllLines(),
+                polygons: DataStore.getAllPolygons(),
             };
             ipcRenderer.send('save-data', dataToSave);
         });
 
         document.getElementById('loadButton').addEventListener('click', () => {
-            if (DataStore.getPoints().length > 0 || DataStore.getLines().length > 0 || DataStore.getPolygons().length > 0) {
-                // 既存のデータがある場合、メインプロセスに確認ダイアログを表示するようにリクエスト
+            // 既存のデータがあるか確認
+            if (
+                DataStore.getAllPoints().length > 0 ||
+                DataStore.getAllLines().length > 0 ||
+                DataStore.getAllPolygons().length > 0
+            ) {
+                // 既存のデータがある場合、確認ダイアログを表示
                 ipcRenderer.invoke('show-confirm-dialog', {
-                    message: '既存のデータがあります。新しいデータを読み込む前に、既存のデータを消去しますか？'
-                }).then((result) => {
-                    if (result) {
-                        // ユーザーが「はい」を選択した場合のみ、ファイル選択ダイアログを表示
-                        ipcRenderer.send('load-data');
-                    }
-                }).catch((error) => {
-                    console.error('確認ダイアログの表示中にエラーが発生しました:', error);
-                });
+                    message: '既存のデータがあります。新しいデータを読み込む前に、既存のデータを消去しますか？',
+                })
+                    .then((result) => {
+                        if (result) {
+                            // ユーザーが「はい」を選択した場合のみ、ファイル選択ダイアログを表示
+                            ipcRenderer.send('load-data');
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('確認ダイアログの表示中にエラーが発生しました:', error);
+                    });
             } else {
                 // 既存のデータがない場合は、直接ファイル選択ダイアログを表示
                 ipcRenderer.send('load-data');
@@ -200,12 +203,10 @@ const EventHandlers = (() => {
         // メインプロセスからのデータ受信
         ipcRenderer.on('load-data-reply', (event, data) => {
             if (data) {
-                DataStore.getPoints().length = 0;
-                DataStore.getPoints().push(...(data.points || []));
-                DataStore.getLines().length = 0;
-                DataStore.getLines().push(...(data.lines || []));
-                DataStore.getPolygons().length = 0;
-                DataStore.getPolygons().push(...(data.polygons || []));
+                DataStore.clearData();
+                (data.points || []).forEach((point) => DataStore.addPoint(point));
+                (data.lines || []).forEach((line) => DataStore.addLine(line));
+                (data.polygons || []).forEach((polygon) => DataStore.addPolygon(polygon));
                 renderData();
             } else {
                 UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');

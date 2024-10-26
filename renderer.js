@@ -41,15 +41,10 @@ const EventHandlers = require('./eventHandlers');
 
     ipcRenderer.on('load-data-reply', (event, data) => {
         if (data) {
-            // 既存のデータをクリア
-            DataStore.getPoints().length = 0;
-            DataStore.getLines().length = 0;
-            DataStore.getPolygons().length = 0;
-
-            // 新しいデータを追加
-            DataStore.getPoints().push(...(data.points || []));
-            DataStore.getLines().push(...(data.lines || []));
-            DataStore.getPolygons().push(...(data.polygons || []));
+            DataStore.clearData();
+            (data.points || []).forEach(point => DataStore.addPoint(point));
+            (data.lines || []).forEach(line => DataStore.addLine(line));
+            (data.polygons || []).forEach(polygon => DataStore.addPolygon(polygon));
             renderData();
         } else {
             UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
