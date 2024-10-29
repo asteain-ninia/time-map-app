@@ -1,4 +1,4 @@
-function getPropertiesForYear(propertiesArray, year) {
+export function getPropertiesForYear(propertiesArray, year) {
     if (!propertiesArray || propertiesArray.length === 0) return null;
     const sortedProperties = propertiesArray.sort((a, b) => a.year - b.year);
     let currentProperties = null;
@@ -11,7 +11,3 @@ function getPropertiesForYear(propertiesArray, year) {
     }
     return currentProperties;
 }
-
-module.exports = {
-    getPropertiesForYear,
-};

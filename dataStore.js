@@ -1,6 +1,6 @@
 // dataStore.js
 
-const { getPropertiesForYear } = require('./utils');
+import { getPropertiesForYear } from './utils.js';
 
 const DataStore = (() => {
     const points = new Map();
@@ -150,4 +150,4 @@ const DataStore = (() => {
     };
 })();
 
-module.exports = DataStore;
+export default DataStore;

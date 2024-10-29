@@ -1,7 +1,7 @@
 // eventHandlers.js
 
 const EventHandlers = (() => {
-    function setupEventListeners(State, DataStore, MapModule, UI, ipcRenderer, renderData) {
+    function setupEventListeners(State, DataStore, MapModule, UI, ipc, renderData) {
         document.getElementById('editModeButton').addEventListener('click', () => {
             State.isEditMode = !State.isEditMode;
             if (!State.isEditMode) {
@@ -171,7 +171,7 @@ const EventHandlers = (() => {
                 lines: DataStore.getAllLines(),
                 polygons: DataStore.getAllPolygons(),
             };
-            ipcRenderer.send('save-data', dataToSave);
+            ipc.send('save-data', dataToSave);
         });
 
         document.getElementById('loadButton').addEventListener('click', () => {
@@ -182,13 +182,13 @@ const EventHandlers = (() => {
                 DataStore.getAllPolygons().length > 0
             ) {
                 // 既存のデータがある場合、確認ダイアログを表示
-                ipcRenderer.invoke('show-confirm-dialog', {
+                ipc.invoke('show-confirm-dialog', {
                     message: '既存のデータがあります。新しいデータを読み込む前に、既存のデータを消去しますか？',
                 })
                     .then((result) => {
                         if (result) {
                             // ユーザーが「はい」を選択した場合のみ、ファイル選択ダイアログを表示
-                            ipcRenderer.send('load-data');
+                            ipc.send('load-data');
                         }
                     })
                     .catch((error) => {
@@ -196,12 +196,12 @@ const EventHandlers = (() => {
                     });
             } else {
                 // 既存のデータがない場合は、直接ファイル選択ダイアログを表示
-                ipcRenderer.send('load-data');
+                ipc.send('load-data');
             }
         });
 
         // メインプロセスからのデータ受信
-        ipcRenderer.on('load-data-reply', (event, data) => {
+        ipc.on('load-data-reply', (data) => {
             if (data) {
                 DataStore.clearData();
                 (data.points || []).forEach((point) => DataStore.addPoint(point));
@@ -213,7 +213,7 @@ const EventHandlers = (() => {
             }
         });
 
-        ipcRenderer.on('save-data-reply', (event, success) => {
+        ipc.on('save-data-reply', (success) => {
             if (success) {
                 UI.showNotification('データを正常に保存しました。');
             } else {
@@ -227,4 +227,4 @@ const EventHandlers = (() => {
     };
 })();
 
-module.exports = EventHandlers;
+export default EventHandlers;

@@ -11,8 +11,9 @@ function createWindow() {
         width: 1280,
         height: 800,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
+            preload: path.join(__dirname, 'preload.cjs'),
+            nodeIntegration: false, // セキュリティのために無効化
+            contextIsolation: true, // セキュリティのために有効化
         },
     });
 

@@ -1,7 +1,5 @@
 // map.js
 
-const path = require('path');
-
 const MapModule = (() => {
     let svg;
     let zoomGroup;
@@ -42,7 +40,9 @@ const MapModule = (() => {
 
             svg.call(zoom);
 
-            d3.xml(path.join(__dirname, 'map.svg')).then((xml) => {
+            const mapSvgUrl = 'map.svg';
+
+            d3.xml(mapSvgUrl).then((xml) => {
                 const mapSvg = xml.documentElement;
 
                 const viewBox = mapSvg.getAttribute('viewBox');
@@ -317,4 +317,4 @@ const MapModule = (() => {
     };
 })();
 
-module.exports = MapModule;
+export default MapModule;

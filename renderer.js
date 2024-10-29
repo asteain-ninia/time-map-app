@@ -1,11 +1,11 @@
 // renderer.js
 
-const path = require('path');
-const { ipcRenderer } = require('electron');
-const DataStore = require('./dataStore');
-const MapModule = require('./map');
-const UI = require('./ui');
-const EventHandlers = require('./eventHandlers');
+const { on } = window.electronAPI;
+
+import DataStore from './dataStore.js';
+import MapModule from './map.js';
+import UI from './ui.js';
+import EventHandlers from './eventHandlers.js';
 
 (() => {
     const State = {
@@ -27,7 +27,8 @@ const EventHandlers = require('./eventHandlers');
         MapModule.loadMap(State, DataStore, UI, renderData)
             .then(() => {
                 // Map のロードが完了した後にイベントリスナーを設定
-                EventHandlers.setupEventListeners(State, DataStore, MapModule, UI, ipcRenderer, renderData);
+                const ipc = window.electronAPI;
+                EventHandlers.setupEventListeners(State, DataStore, MapModule, UI, ipc, renderData);
             })
             .catch((error) => {
                 console.error('Map のロード中にエラーが発生しました:', error);
@@ -39,15 +40,4 @@ const EventHandlers = require('./eventHandlers');
         init();
     };
 
-    ipcRenderer.on('load-data-reply', (event, data) => {
-        if (data) {
-            DataStore.clearData();
-            (data.points || []).forEach(point => DataStore.addPoint(point));
-            (data.lines || []).forEach(line => DataStore.addLine(line));
-            (data.polygons || []).forEach(polygon => DataStore.addPolygon(polygon));
-            renderData();
-        } else {
-            UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
-        }
-    });
 })();

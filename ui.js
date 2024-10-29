@@ -1,6 +1,6 @@
 // ui.js
 
-const { getPropertiesForYear } = require('./utils');
+import { getPropertiesForYear } from './utils.js';
 
 const UI = (() => {
     const tooltip = d3.select('#tooltip');
@@ -369,4 +369,4 @@ const UI = (() => {
     };
 })();
 
-module.exports = UI;
+export default UI;
