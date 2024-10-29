@@ -29,7 +29,7 @@ const UI = (() => {
 
     function showTooltip(event, d, State) {
         tooltip.style('display', 'block')
-            .html(`名前: ${d.name}<br>年: ${State.currentYear}`);
+            .html(`名前: ${d.name}<br>年: ${d.year !== undefined ? d.year : '不明'}`);
     }
 
     function moveTooltip(event) {
@@ -99,20 +99,21 @@ const UI = (() => {
             // 新規ポイントの場合、デフォルト値を設定
             document.getElementById('pointName').value = '新しいポイント';
             document.getElementById('pointDescription').value = '';
-            document.getElementById('pointYear').value = currentYear;
+            document.getElementById('pointYear').value = State.currentYear !== undefined ? State.currentYear : '';
         } else {
             // 既存ポイントの場合、現在の年に対応するプロパティを取得
-            const properties = getPropertiesForYear(point.properties, currentYear);
+            const properties = getPropertiesForYear(point.properties, State.currentYear || 0);
 
             document.getElementById('pointName').value = properties.name || '';
             document.getElementById('pointDescription').value = properties.description || '';
-            document.getElementById('pointYear').value = currentYear;
+            document.getElementById('pointYear').value = properties.year !== undefined ? properties.year : '';
         }
 
         document.getElementById('savePointButton').onclick = () => {
             const name = document.getElementById('pointName').value;
             const description = document.getElementById('pointDescription').value;
-            const year = parseInt(document.getElementById('pointYear').value, 10);
+            const yearInputValue = document.getElementById('pointYear').value;
+            const year = yearInputValue !== '' ? parseInt(yearInputValue, 10) : undefined;
 
             if (!point) {
                 // 新規ポイントの追加
@@ -173,9 +174,17 @@ const UI = (() => {
     function showLineEditForm(line, DataStore, renderData, State, isNewLine = false) {
         const form = document.getElementById('lineEditForm');
         form.style.display = 'block';
-        document.getElementById('lineName').value = line.name || '';
-        document.getElementById('lineDescription').value = line.description || '';
-        document.getElementById('lineYear').value = State.currentYear || 0;
+
+        if (!line.properties || line.properties.length === 0) {
+            document.getElementById('lineName').value = line.name || '';
+            document.getElementById('lineDescription').value = line.description || '';
+            document.getElementById('lineYear').value = State.currentYear !== undefined ? State.currentYear : '';
+        } else {
+            const properties = getPropertiesForYear(line.properties, State.currentYear || 0);
+            document.getElementById('lineName').value = properties.name || '';
+            document.getElementById('lineDescription').value = properties.description || '';
+            document.getElementById('lineYear').value = properties.year !== undefined ? properties.year : '';
+        }
 
         makeDraggable(form);
 
@@ -227,9 +236,17 @@ const UI = (() => {
     function showPolygonEditForm(polygon, DataStore, renderData, State, isNewPolygon = false) {
         const form = document.getElementById('polygonEditForm');
         form.style.display = 'block';
-        document.getElementById('polygonName').value = polygon.name || '';
-        document.getElementById('polygonDescription').value = polygon.description || '';
-        document.getElementById('polygonYear').value = State.currentYear || 0;
+
+        if (!polygon.properties || polygon.properties.length === 0) {
+            document.getElementById('polygonName').value = polygon.name || '';
+            document.getElementById('polygonDescription').value = polygon.description || '';
+            document.getElementById('polygonYear').value = State.currentYear !== undefined ? State.currentYear : '';
+        } else {
+            const properties = getPropertiesForYear(polygon.properties, State.currentYear || 0);
+            document.getElementById('polygonName').value = properties.name || '';
+            document.getElementById('polygonDescription').value = properties.description || '';
+            document.getElementById('polygonYear').value = properties.year !== undefined ? properties.year : '';
+        }
 
         makeDraggable(form);
 
