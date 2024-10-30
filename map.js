@@ -83,8 +83,7 @@ const MapModule = (() => {
     function renderData() {
         // 既存のデータと一時的な描画を削除
         zoomGroup.selectAll('.data-group').remove();
-        zoomGroup.selectAll('.tempLine').remove();  // 一時的な線を削除
-        zoomGroup.selectAll('.tempPolygon').remove();  // 一時的な面を削除
+        zoomGroup.selectAll('.temp-feature').remove();
 
         const dataGroup = zoomGroup.append('g')
             .attr('class', 'data-group');
@@ -95,218 +94,261 @@ const MapModule = (() => {
         mapCopies.forEach(offset => {
             const offsetX = offset * mapWidth;
 
-            // 仮のポイントの描画
-            if (State.tempPoint) {
-                drawTemporaryPoint();
-            } else {
-                // 仮のポイントがない場合、既存の仮ポイントを削除
-                zoomGroup.selectAll('.tempPoint').remove();
-            }
-
             // ポイントの描画
-            dataGroup.selectAll(`.point-${offset}`)
-                .data(DataStore.getPoints(currentYear), d => d.id)
-                .join(
-                    enter => enter.append('circle')
-                        .attr('class', `point-${offset}`)
-                        .attr('cx', d => d.x + offsetX)
-                        .attr('cy', d => d.y)
-                        .attr('r', 5)
-                        .attr('fill', 'red')
-                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
-                        .on('mousemove', UI.moveTooltip)
-                        .on('mouseout', UI.hideTooltip)
-                        .on('click', (event, d) => {
-                            event.stopPropagation();
-                            if (State.isEditMode) {
-                                UI.showEditForm(d, DataStore, renderData, State);
-                            } else {
-                                UI.showDetailWindow(d);
-                            }
-                        }),
-                    update => update
-                        .attr('cx', d => d.x + offsetX)
-                        .attr('cy', d => d.y),
-                    exit => exit.remove()
-                );
+            drawFeatures(dataGroup, {
+                data: DataStore.getPoints(currentYear),
+                className: `point-${offset}`,
+                elementType: 'circle',
+                attributes: {
+                    cx: d => d.x + offsetX,
+                    cy: d => d.y,
+                    r: 5,
+                    fill: 'red'
+                },
+                eventHandlers: {
+                    mouseover: (event, d) => UI.showTooltip(event, d, State),
+                    mousemove: UI.moveTooltip,
+                    mouseout: UI.hideTooltip,
+                    click: (event, d) => {
+                        event.stopPropagation();
+                        if (State.isEditMode) {
+                            UI.showEditForm(d, DataStore, renderData, State);
+                        } else {
+                            UI.showDetailWindow(d);
+                        }
+                    }
+                }
+            });
 
             // ラインの描画
-            dataGroup.selectAll(`.line-${offset}`)
-                .data(DataStore.getLines(currentYear), d => d.id)
-                .join(
-                    enter => enter.append('path')
-                        .attr('class', `line line-${offset}`)
-                        .attr('d', d => {
-                            const linePoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)(linePoints);
-                        })
-                        .attr('stroke', 'blue')
-                        .attr('stroke-width', 2)
-                        .attr('fill', 'none')
-                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
-                        .on('mousemove', UI.moveTooltip)
-                        .on('mouseout', UI.hideTooltip)
-                        .on('click', (event, d) => {
-                            event.stopPropagation();
-                            if (State.isEditMode) {
-                                UI.showLineEditForm(d, DataStore, renderData, State);
-                            } else {
-                                UI.showDetailWindow(d);
-                            }
-                        }),
-                    update => update
-                        .attr('d', d => {
-                            const linePoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)(linePoints);
-                        }),
-                    exit => exit.remove()
-                );
+            drawFeatures(dataGroup, {
+                data: DataStore.getLines(currentYear),
+                className: `line-${offset}`,
+                elementType: 'path',
+                attributes: {
+                    d: d => {
+                        const linePoints = d.points.map(p => ({
+                            x: p.x + offsetX,
+                            y: p.y
+                        }));
+                        return d3.line()
+                            .x(p => p.x)
+                            .y(p => p.y)(linePoints);
+                    },
+                    stroke: 'blue',
+                    'stroke-width': 2,
+                    fill: 'none'
+                },
+                eventHandlers: {
+                    mouseover: (event, d) => UI.showTooltip(event, d, State),
+                    mousemove: UI.moveTooltip,
+                    mouseout: UI.hideTooltip,
+                    click: (event, d) => {
+                        event.stopPropagation();
+                        if (State.isEditMode) {
+                            UI.showLineEditForm(d, DataStore, renderData, State);
+                        } else {
+                            UI.showDetailWindow(d);
+                        }
+                    }
+                }
+            });
 
             // ポリゴンの描画
-            dataGroup.selectAll(`.polygon-${offset}`)
-                .data(DataStore.getPolygons(currentYear), d => d.id)
-                .join(
-                    enter => enter.append('path')
-                        .attr('class', `polygon polygon-${offset}`)
-                        .attr('d', d => {
-                            const polygonPoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)
-                                .curve(d3.curveLinearClosed)(polygonPoints);
-                        })
-                        .attr('stroke', 'green')
-                        .attr('stroke-width', 2)
-                        .attr('fill', 'rgba(0, 255, 0, 0.3)')
-                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
-                        .on('mousemove', UI.moveTooltip)
-                        .on('mouseout', UI.hideTooltip)
-                        .on('click', (event, d) => {
-                            event.stopPropagation();
-                            if (State.isEditMode) {
-                                UI.showPolygonEditForm(d, DataStore, renderData, State);
-                            } else {
-                                UI.showDetailWindow(d);
-                            }
-                        }),
-                    update => update
-                        .attr('d', d => {
-                            const polygonPoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)
-                                .curve(d3.curveLinearClosed)(polygonPoints);
-                        }),
-                    exit => exit.remove()
-                );
+            drawFeatures(dataGroup, {
+                data: DataStore.getPolygons(currentYear),
+                className: `polygon-${offset}`,
+                elementType: 'path',
+                attributes: {
+                    d: d => {
+                        const polygonPoints = d.points.map(p => ({
+                            x: p.x + offsetX,
+                            y: p.y
+                        }));
+                        return d3.line()
+                            .x(p => p.x)
+                            .y(p => p.y)
+                            .curve(d3.curveLinearClosed)(polygonPoints);
+                    },
+                    stroke: 'green',
+                    'stroke-width': 2,
+                    fill: 'rgba(0, 255, 0, 0.3)'
+                },
+                eventHandlers: {
+                    mouseover: (event, d) => UI.showTooltip(event, d, State),
+                    mousemove: UI.moveTooltip,
+                    mouseout: UI.hideTooltip,
+                    click: (event, d) => {
+                        event.stopPropagation();
+                        if (State.isEditMode) {
+                            UI.showPolygonEditForm(d, DataStore, renderData, State);
+                        } else {
+                            UI.showDetailWindow(d);
+                        }
+                    }
+                }
+            });
         });
 
-        // 仮の線と面、ポイントの描画
+        // 仮のフィーチャーの描画
         if (State.isDrawing) {
-            if (State.currentTool === 'line') {
-                drawTemporaryLine();
-            } else if (State.currentTool === 'polygon') {
-                drawTemporaryPolygon();
+            drawTemporaryFeatures();
+        } else if (State.currentTool === 'point' && State.tempPoint) {
+            drawTemporaryFeatures();
+        }
+    }
+
+    function drawFeatures(dataGroup, { data, className, elementType, attributes, eventHandlers }) {
+        dataGroup.selectAll(`.${className}`)
+            .data(data, d => d.id)
+            .join(
+                enter => {
+                    const elements = enter.append(elementType)
+                        .attr('class', className);
+
+                    for (const [attrName, attrValue] of Object.entries(attributes)) {
+                        elements.attr(attrName, attrValue);
+                    }
+
+                    for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
+                        elements.on(eventName, eventHandler);
+                    }
+
+                    return elements;
+                },
+                update => {
+                    for (const [attrName, attrValue] of Object.entries(attributes)) {
+                        update.attr(attrName, attrValue);
+                    }
+                    return update;
+                },
+                exit => exit.remove()
+            );
+    }
+
+
+    function drawTemporaryFeatures() {
+        zoomGroup.selectAll('.temp-feature').remove();
+
+        const mapCopies = [-1, 0, 1, 2];
+
+        mapCopies.forEach(offset => {
+            const offsetX = offset * mapWidth;
+
+            if (State.currentTool === 'point' && State.tempPoint) {
+                // 仮のポイントの描画
+                drawTemporaryFeature(zoomGroup, {
+                    data: [State.tempPoint],
+                    className: `tempPoint-${offset}`,
+                    elementType: 'circle',
+                    attributes: {
+                        cx: d => d.x + offsetX,
+                        cy: d => d.y,
+                        r: 5,
+                        fill: 'orange'
+                    }
+                });
+            } else if (State.currentTool === 'line' && State.tempLinePoints.length > 0) {
+                // 仮のラインの描画
+                const tempLinePointsWithOffset = State.tempLinePoints.map(p => ({
+                    x: p.x + offsetX,
+                    y: p.y
+                }));
+
+                // 仮のラインを描画
+                drawTemporaryFeature(zoomGroup, {
+                    data: [tempLinePointsWithOffset],
+                    className: `tempLine-${offset}`,
+                    elementType: 'path',
+                    attributes: {
+                        d: d3.line()
+                            .x(d => d.x)
+                            .y(d => d.y)
+                    },
+                    style: {
+                        stroke: 'orange',
+                        'stroke-width': 2,
+                        fill: 'none'
+                    }
+                });
+
+                // 仮のポイントを各頂点に描画
+                drawTemporaryFeature(zoomGroup, {
+                    data: tempLinePointsWithOffset,
+                    className: `tempPoint-${offset}`,
+                    elementType: 'circle',
+                    attributes: {
+                        cx: d => d.x,
+                        cy: d => d.y,
+                        r: 5,
+                        fill: 'orange'
+                    }
+                });
+            } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length > 0) {
+                // 仮のポリゴンの描画
+                const tempPolygonPointsWithOffset = State.tempPolygonPoints.map(p => ({
+                    x: p.x + offsetX,
+                    y: p.y
+                }));
+
+                // 仮のポリゴンを描画
+                drawTemporaryFeature(zoomGroup, {
+                    data: [tempPolygonPointsWithOffset],
+                    className: `tempPolygon-${offset}`,
+                    elementType: 'path',
+                    attributes: {
+                        d: d3.line()
+                            .x(d => d.x)
+                            .y(d => d.y)
+                            .curve(d3.curveLinearClosed)
+                    },
+                    style: {
+                        stroke: 'orange',
+                        'stroke-width': 2,
+                        fill: 'rgba(255, 165, 0, 0.3)'
+                    }
+                });
+
+                // 仮のポイントを各頂点に描画
+                drawTemporaryFeature(zoomGroup, {
+                    data: tempPolygonPointsWithOffset,
+                    className: `tempPoint-${offset}`,
+                    elementType: 'circle',
+                    attributes: {
+                        cx: d => d.x,
+                        cy: d => d.y,
+                        r: 5,
+                        fill: 'orange'
+                    }
+                });
             }
-            drawTemporaryPoint(); // 常に仮のポイントを描画
-        } else if (State.currentTool === 'point' && State.tempPoint) {
-            drawTemporaryPoint();
+        });
+    }
+
+
+    function drawTemporaryFeature(group, { data, className, elementType, attributes, style }) {
+        const tempGroup = group.append('g')
+            .attr('class', 'temp-feature');
+
+        const elements = tempGroup.selectAll(`.${className}`)
+            .data(data)
+            .enter()
+            .append(elementType)
+            .attr('class', className);
+
+        if (elementType === 'path') {
+            elements.attr('d', attributes.d);
+        } else {
+            for (const [attrName, attrValue] of Object.entries(attributes)) {
+                elements.attr(attrName, attrValue);
+            }
         }
-    }
 
-    function drawTemporaryPoint() {
-        zoomGroup.selectAll('.tempPoint').remove();
-
-        const mapCopies = [-1, 0, 1, 2];
-
-        // 現在のツールに応じて、一時的なポイントを取得
-        let tempPoints = [];
-        if (State.currentTool === 'line' && State.tempLinePoints.length > 0) {
-            tempPoints = [State.tempLinePoints[State.tempLinePoints.length - 1]];
-        } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length > 0) {
-            tempPoints = [State.tempPolygonPoints[State.tempPolygonPoints.length - 1]];
-        } else if (State.currentTool === 'point' && State.tempPoint) {
-            tempPoints = [State.tempPoint];
+        if (style) {
+            for (const [styleName, styleValue] of Object.entries(style)) {
+                elements.style(styleName, styleValue);
+            }
         }
-
-        mapCopies.forEach(offset => {
-            const offsetX = offset * mapWidth;
-
-            zoomGroup.selectAll(`.tempPoint-${offset}`)
-                .data(tempPoints)
-                .enter()
-                .append('circle')
-                .attr('class', `tempPoint tempPoint-${offset}`)
-                .attr('cx', d => d.x + offsetX)
-                .attr('cy', d => d.y)
-                .attr('r', 5)
-                .attr('fill', 'orange');
-        });
-    }
-
-    function drawTemporaryLine() {
-        zoomGroup.selectAll('.tempLine').remove();
-
-        const mapCopies = [-1, 0, 1, 2];
-
-        mapCopies.forEach(offset => {
-            const offsetX = offset * mapWidth;
-
-            zoomGroup.append('path')
-                .datum(State.tempLinePoints.map(p => ({
-                    x: p.x + offsetX,
-                    y: p.y
-                })))
-                .attr('class', 'tempLine')
-                .attr('d', d3.line()
-                    .x(d => d.x)
-                    .y(d => d.y)
-                )
-                .attr('stroke', 'orange')
-                .attr('stroke-width', 2)
-                .attr('fill', 'none');
-        });
-    }
-
-    function drawTemporaryPolygon() {
-        zoomGroup.selectAll('.tempPolygon').remove();
-
-        const mapCopies = [-1, 0, 1, 2];
-
-        mapCopies.forEach(offset => {
-            const offsetX = offset * mapWidth;
-
-            zoomGroup.append('path')
-                .datum(State.tempPolygonPoints.map(p => ({
-                    x: p.x + offsetX,
-                    y: p.y
-                })))
-                .attr('class', 'tempPolygon')
-                .attr('d', d3.line()
-                    .x(d => d.x)
-                    .y(d => d.y)
-                    .curve(d3.curveLinearClosed)
-                )
-                .attr('stroke', 'orange')
-                .attr('stroke-width', 2)
-                .attr('fill', 'rgba(255, 165, 0, 0.3)');
-        });
     }
 
     return {
