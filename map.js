@@ -1,5 +1,7 @@
 // map.js
 
+import stateManager from './stateManager.js'; // 追加
+
 const MapModule = (() => {
     let svg;
     let zoomGroup;
@@ -7,13 +9,11 @@ const MapModule = (() => {
     let mapHeight = 800;
 
     // モジュールスコープで保持する変数
-    let State;
     let DataStore;
     let UI;
 
-    function loadMap(_State, _DataStore, _UI, renderData) {
+    function loadMap(_DataStore, _UI, renderData) {
         return new Promise((resolve, reject) => {
-            State = _State;
             DataStore = _DataStore;
             UI = _UI;
 
@@ -21,7 +21,7 @@ const MapModule = (() => {
                 .append('svg')
                 .attr('width', '100%')
                 .attr('height', '100%');
-            console.log("SVG読み込みOK")
+
             zoomGroup = svg.append('g');
 
             const zoom = d3.zoom()
@@ -81,6 +81,8 @@ const MapModule = (() => {
     }
 
     function renderData() {
+        const state = stateManager.getState();
+
         // 既存のデータと一時的な描画を削除
         zoomGroup.selectAll('.data-group').remove();
         zoomGroup.selectAll('.temp-feature').remove();
@@ -88,7 +90,7 @@ const MapModule = (() => {
         const dataGroup = zoomGroup.append('g')
             .attr('class', 'data-group');
 
-        const currentYear = State.currentYear || 0;
+        const currentYear = state.currentYear || 0;
         const mapCopies = [-1, 0, 1];
 
         mapCopies.forEach(offset => {
@@ -106,13 +108,14 @@ const MapModule = (() => {
                     fill: 'red'
                 },
                 eventHandlers: {
-                    mouseover: (event, d) => UI.showTooltip(event, d, State),
+                    mouseover: (event, d) => UI.showTooltip(event, d),
                     mousemove: UI.moveTooltip,
                     mouseout: UI.hideTooltip,
                     click: (event, d) => {
                         event.stopPropagation();
-                        if (State.isEditMode) {
-                            UI.showEditForm(d, DataStore, renderData, State);
+                        const currentState = stateManager.getState();
+                        if (currentState.isEditMode) {
+                            UI.showEditForm(d, DataStore, renderData);
                         } else {
                             UI.showDetailWindow(d);
                         }
@@ -140,13 +143,14 @@ const MapModule = (() => {
                     fill: 'none'
                 },
                 eventHandlers: {
-                    mouseover: (event, d) => UI.showTooltip(event, d, State),
+                    mouseover: (event, d) => UI.showTooltip(event, d),
                     mousemove: UI.moveTooltip,
                     mouseout: UI.hideTooltip,
                     click: (event, d) => {
                         event.stopPropagation();
-                        if (State.isEditMode) {
-                            UI.showLineEditForm(d, DataStore, renderData, State);
+                        const currentState = stateManager.getState();
+                        if (currentState.isEditMode) {
+                            UI.showLineEditForm(d, DataStore, renderData);
                         } else {
                             UI.showDetailWindow(d);
                         }
@@ -175,13 +179,14 @@ const MapModule = (() => {
                     fill: 'rgba(0, 255, 0, 0.3)'
                 },
                 eventHandlers: {
-                    mouseover: (event, d) => UI.showTooltip(event, d, State),
+                    mouseover: (event, d) => UI.showTooltip(event, d),
                     mousemove: UI.moveTooltip,
                     mouseout: UI.hideTooltip,
                     click: (event, d) => {
                         event.stopPropagation();
-                        if (State.isEditMode) {
-                            UI.showPolygonEditForm(d, DataStore, renderData, State);
+                        const currentState = stateManager.getState();
+                        if (currentState.isEditMode) {
+                            UI.showPolygonEditForm(d, DataStore, renderData);
                         } else {
                             UI.showDetailWindow(d);
                         }
@@ -191,9 +196,7 @@ const MapModule = (() => {
         });
 
         // 仮のフィーチャーの描画
-        if (State.isDrawing) {
-            drawTemporaryFeatures();
-        } else if (State.currentTool === 'point' && State.tempPoint) {
+        if (state.isDrawing || (state.currentTool === 'point' && state.tempPoint)) {
             drawTemporaryFeatures();
         }
     }
@@ -226,8 +229,8 @@ const MapModule = (() => {
             );
     }
 
-
     function drawTemporaryFeatures() {
+        const state = stateManager.getState();
         zoomGroup.selectAll('.temp-feature').remove();
 
         const mapCopies = [-1, 0, 1, 2];
@@ -235,10 +238,10 @@ const MapModule = (() => {
         mapCopies.forEach(offset => {
             const offsetX = offset * mapWidth;
 
-            if (State.currentTool === 'point' && State.tempPoint) {
+            if (state.currentTool === 'point' && state.tempPoint) {
                 // 仮のポイントの描画
                 drawTemporaryFeature(zoomGroup, {
-                    data: [State.tempPoint],
+                    data: [state.tempPoint],
                     className: `tempPoint-${offset}`,
                     elementType: 'circle',
                     attributes: {
@@ -248,9 +251,9 @@ const MapModule = (() => {
                         fill: 'orange'
                     }
                 });
-            } else if (State.currentTool === 'line' && State.tempLinePoints.length > 0) {
+            } else if (state.currentTool === 'line' && state.tempLinePoints.length > 0) {
                 // 仮のラインの描画
-                const tempLinePointsWithOffset = State.tempLinePoints.map(p => ({
+                const tempLinePointsWithOffset = state.tempLinePoints.map(p => ({
                     x: p.x + offsetX,
                     y: p.y
                 }));
@@ -284,9 +287,9 @@ const MapModule = (() => {
                         fill: 'orange'
                     }
                 });
-            } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length > 0) {
+            } else if (state.currentTool === 'polygon' && state.tempPolygonPoints.length > 0) {
                 // 仮のポリゴンの描画
-                const tempPolygonPointsWithOffset = State.tempPolygonPoints.map(p => ({
+                const tempPolygonPointsWithOffset = state.tempPolygonPoints.map(p => ({
                     x: p.x + offsetX,
                     y: p.y
                 }));
@@ -325,7 +328,6 @@ const MapModule = (() => {
         });
     }
 
-
     function drawTemporaryFeature(group, { data, className, elementType, attributes, style }) {
         const tempGroup = group.append('g')
             .attr('class', 'temp-feature');
@@ -337,7 +339,7 @@ const MapModule = (() => {
             .attr('class', className);
 
         if (elementType === 'path') {
-            elements.attr('d', attributes.d);
+            elements.attr('d', d => attributes.d(d));
         } else {
             for (const [attrName, attrValue] of Object.entries(attributes)) {
                 elements.attr(attrName, attrValue);

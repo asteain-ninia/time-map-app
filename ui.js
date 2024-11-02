@@ -1,33 +1,44 @@
 // ui.js
 
 import { getPropertiesForYear } from './utils.js';
+import stateManager from './stateManager.js'; // 追加
 
 const UI = (() => {
     const tooltip = d3.select('#tooltip');
 
-    function updateUI(State) {
-        document.getElementById('editModeButton').textContent =
-            `編集モード: ${State.isEditMode ? 'ON' : 'OFF'}`;
+    function updateUI() {
+        const state = stateManager.getState();
 
-        document.getElementById('editModeButton').classList.toggle('active', State.isEditMode);
-        document.getElementById('tools').style.display = State.isEditMode ? 'block' : 'none';
+        document.getElementById('editModeButton').textContent =
+            `編集モード: ${state.isEditMode ? 'ON' : 'OFF'}`;
+
+        document.getElementById('editModeButton').classList.toggle('active', state.isEditMode);
+        document.getElementById('tools').style.display = state.isEditMode ? 'block' : 'none';
 
         const buttons = document.querySelectorAll('#tools button');
         buttons.forEach(button => {
-            button.classList.toggle('active', button.id === `${State.currentTool}Tool`);
+            button.classList.toggle('active', button.id === `${state.currentTool}Tool`);
         });
 
         // 確定ボタンの表示/非表示
-        console.log(State.isEditMode);
-        console.log(State.isDrawing);
-        document.getElementById('drawControls').style.display = (State.isEditMode && State.isDrawing) ? 'block' : 'none';
+        let showConfirmButton = false;
+        if (state.isEditMode && state.isDrawing) {
+            if (state.currentTool === 'line' && state.tempLinePoints.length >= 2) {
+                showConfirmButton = true;
+            } else if (state.currentTool === 'polygon' && state.tempPolygonPoints.length >= 3) {
+                showConfirmButton = true;
+            }
+        }
 
-        if (!State.isEditMode) {
+        document.getElementById('drawControls').style.display = showConfirmButton ? 'block' : 'none';
+
+        if (!state.isEditMode) {
             hideAllForms();
         }
     }
 
-    function showTooltip(event, d, State) {
+
+    function showTooltip(event, d) {
         tooltip.style('display', 'block')
             .html(`名前: ${d.name}<br>年: ${d.year !== undefined ? d.year : '不明'}`);
     }
@@ -88,21 +99,22 @@ const UI = (() => {
         });
     }
 
-    function showEditForm(point, DataStore, renderData, State) {
+    function showEditForm(point, DataStore, renderData) {
         const form = document.getElementById('editForm');
         form.style.display = 'block';
         makeDraggable(form);
 
-        const currentYear = State.currentYear || 0;
+        const state = stateManager.getState();
+        const currentYear = state.currentYear || 0;
 
         if (!point) {
             // 新規ポイントの場合、デフォルト値を設定
             document.getElementById('pointName').value = '新しいポイント';
             document.getElementById('pointDescription').value = '';
-            document.getElementById('pointYear').value = State.currentYear !== undefined ? State.currentYear : '';
+            document.getElementById('pointYear').value = state.currentYear !== undefined ? state.currentYear : '';
         } else {
             // 既存ポイントの場合、現在の年に対応するプロパティを取得
-            const properties = getPropertiesForYear(point.properties, State.currentYear || 0);
+            const properties = getPropertiesForYear(point.properties, currentYear);
 
             document.getElementById('pointName').value = properties.name || '';
             document.getElementById('pointDescription').value = properties.description || '';
@@ -119,8 +131,8 @@ const UI = (() => {
                 // 新規ポイントの追加
                 const newPoint = {
                     id: Date.now(),
-                    x: State.tempPoint.x,
-                    y: State.tempPoint.y,
+                    x: state.tempPoint.x,
+                    y: state.tempPoint.y,
                     properties: [
                         {
                             year: year,
@@ -145,8 +157,10 @@ const UI = (() => {
             }
 
             // 描画モードを終了し、仮のポイントをクリア
-            State.isDrawing = false;
-            State.tempPoint = null;
+            stateManager.setState({
+                isDrawing: false,
+                tempPoint: null,
+            });
             renderData();
             form.style.display = 'none';
         };
@@ -154,8 +168,10 @@ const UI = (() => {
         document.getElementById('cancelEditButton').onclick = () => {
             form.style.display = 'none';
             // 描画をキャンセル
-            State.isDrawing = false;
-            State.tempPoint = null;
+            stateManager.setState({
+                isDrawing: false,
+                tempPoint: null,
+            });
             renderData();
         };
 
@@ -163,24 +179,28 @@ const UI = (() => {
             if (point) {
                 DataStore.removePoint(point.id);
             }
-            State.isDrawing = false;
-            State.tempPoint = null;
+            stateManager.setState({
+                isDrawing: false,
+                tempPoint: null,
+            });
             renderData();
             form.style.display = 'none';
         };
     }
 
-
-    function showLineEditForm(line, DataStore, renderData, State, isNewLine = false) {
+    function showLineEditForm(line, DataStore, renderData, isNewLine = false) {
         const form = document.getElementById('lineEditForm');
         form.style.display = 'block';
+
+        const state = stateManager.getState();
+        const currentYear = state.currentYear || 0;
 
         if (!line.properties || line.properties.length === 0) {
             document.getElementById('lineName').value = line.name || '';
             document.getElementById('lineDescription').value = line.description || '';
-            document.getElementById('lineYear').value = State.currentYear !== undefined ? State.currentYear : '';
+            document.getElementById('lineYear').value = state.currentYear !== undefined ? state.currentYear : '';
         } else {
-            const properties = getPropertiesForYear(line.properties, State.currentYear || 0);
+            const properties = getPropertiesForYear(line.properties, currentYear);
             document.getElementById('lineName').value = properties.name || '';
             document.getElementById('lineDescription').value = properties.description || '';
             document.getElementById('lineYear').value = properties.year !== undefined ? properties.year : '';
@@ -204,9 +224,11 @@ const UI = (() => {
             });
 
             DataStore.updateLine(line);
-            State.isDrawing = false;
-            State.tempLinePoints = [];
-            State.tempPoint = null; // 仮のポイントをクリア
+            stateManager.setState({
+                isDrawing: false,
+                tempLinePoints: [],
+                tempPoint: null,
+            });
             renderData();
             form.style.display = 'none';
         };
@@ -214,9 +236,11 @@ const UI = (() => {
         document.getElementById('cancelLineEditButton').onclick = () => {
             form.style.display = 'none';
             // 描画をキャンセル
-            State.isDrawing = false;
-            State.tempLinePoints = [];
-            State.tempPoint = null; // 仮のポイントをクリア
+            stateManager.setState({
+                isDrawing: false,
+                tempLinePoints: [],
+                tempPoint: null,
+            });
             // 追加した線を削除（新規の場合のみ）
             if (isNewLine) {
                 DataStore.removeLine(line.id);
@@ -226,23 +250,28 @@ const UI = (() => {
 
         document.getElementById('deleteLineButton').onclick = () => {
             DataStore.removeLine(line.id);
-            State.isDrawing = false;
-            State.tempLinePoints = [];
+            stateManager.setState({
+                isDrawing: false,
+                tempLinePoints: [],
+            });
             renderData();
             form.style.display = 'none';
         };
     }
 
-    function showPolygonEditForm(polygon, DataStore, renderData, State, isNewPolygon = false) {
+    function showPolygonEditForm(polygon, DataStore, renderData, isNewPolygon = false) {
         const form = document.getElementById('polygonEditForm');
         form.style.display = 'block';
+
+        const state = stateManager.getState();
+        const currentYear = state.currentYear || 0;
 
         if (!polygon.properties || polygon.properties.length === 0) {
             document.getElementById('polygonName').value = polygon.name || '';
             document.getElementById('polygonDescription').value = polygon.description || '';
-            document.getElementById('polygonYear').value = State.currentYear !== undefined ? State.currentYear : '';
+            document.getElementById('polygonYear').value = state.currentYear !== undefined ? state.currentYear : '';
         } else {
-            const properties = getPropertiesForYear(polygon.properties, State.currentYear || 0);
+            const properties = getPropertiesForYear(polygon.properties, currentYear);
             document.getElementById('polygonName').value = properties.name || '';
             document.getElementById('polygonDescription').value = properties.description || '';
             document.getElementById('polygonYear').value = properties.year !== undefined ? properties.year : '';
@@ -266,9 +295,11 @@ const UI = (() => {
             });
 
             DataStore.updatePolygon(polygon);
-            State.isDrawing = false;
-            State.tempPolygonPoints = [];
-            State.tempPoint = null; // 仮のポイントをクリア
+            stateManager.setState({
+                isDrawing: false,
+                tempPolygonPoints: [],
+                tempPoint: null,
+            });
             renderData();
             form.style.display = 'none';
         };
@@ -276,10 +307,12 @@ const UI = (() => {
         document.getElementById('cancelPolygonEditButton').onclick = () => {
             form.style.display = 'none';
             // 描画をキャンセル
-            State.isDrawing = false;
-            State.tempPolygonPoints = [];
-            State.tempPoint = null; // 仮のポイントをクリア
-            // 追加した面を削除（新規の場合のみ）
+            stateManager.setState({
+                isDrawing: false,
+                tempPolygonPoints: [],
+                tempPoint: null,
+            });
+            // 新規ポリゴンの場合は削除
             if (isNewPolygon) {
                 DataStore.removePolygon(polygon.id);
             }
@@ -288,8 +321,10 @@ const UI = (() => {
 
         document.getElementById('deletePolygonButton').onclick = () => {
             DataStore.removePolygon(polygon.id);
-            State.isDrawing = false;
-            State.tempPolygonPoints = [];
+            stateManager.setState({
+                isDrawing: false,
+                tempPolygonPoints: [],
+            });
             renderData();
             form.style.display = 'none';
         };
@@ -313,11 +348,12 @@ const UI = (() => {
         }, 3000);
     }
 
-    function updateEventList(DataStore, State) {
+    function updateEventList(DataStore) {
         const eventList = document.getElementById('eventList');
         eventList.innerHTML = ''; // 既存のリストをクリア
 
-        const currentYear = State.currentYear || 0;
+        const state = stateManager.getState();
+        const currentYear = state.currentYear || 0;
 
         // 全エンティティを取得
         const points = DataStore.getPoints(currentYear);
