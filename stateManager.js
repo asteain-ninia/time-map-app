@@ -8,6 +8,7 @@ const state = {
     tempLinePoints: [],
     tempPolygonPoints: [],
     currentYear: 0,
+    debugMode: true, // デバッグモードを追加
 };
 
 const listeners = [];
