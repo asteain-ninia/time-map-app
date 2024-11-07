@@ -1,235 +1,347 @@
 // eventHandlers.js
 
+import stateManager from './stateManager.js';
+
 const EventHandlers = (() => {
-    function setupEventListeners(State, DataStore, MapModule, UI, ipcRenderer, renderData) {
-        document.getElementById('editModeButton').addEventListener('click', () => {
-            State.isEditMode = !State.isEditMode;
-            if (!State.isEditMode) {
-                State.currentTool = 'select';
-                State.isDrawing = false;
-                State.tempLinePoints = [];
-                State.tempPolygonPoints = [];
-            }
-            UI.updateUI(State);
-            renderData();
-        });
+    function setupEventListeners(DataStore, MapModule, UI, ipc, renderData) {
+        try {
+            // 状態の取得
+            let state = stateManager.getState();
 
-        // ツールボタンのイベントリスナー
-        document.getElementById('selectTool').addEventListener('click', () => {
-            State.currentTool = 'select';
-            UI.updateUI(State);
-            State.isDrawing = false;
-            State.tempLinePoints = [];
-            State.tempPolygonPoints = [];
-            renderData();
-        });
-        document.getElementById('pointTool').addEventListener('click', () => {
-            State.currentTool = 'point';
-            UI.updateUI(State);
-        });
-        document.getElementById('lineTool').addEventListener('click', () => {
-            State.currentTool = 'line';
-            UI.updateUI(State);
-        });
-        document.getElementById('polygonTool').addEventListener('click', () => {
-            State.currentTool = 'polygon';
-            UI.updateUI(State);
-        });
-        console.log("イベント追加開始")
-        console.log(d3.select('#map').selectAll("svg"))
+            // 状態の変更時に再度状態を取得
+            stateManager.subscribe(newState => {
+                state = newState;
+            });
 
-        initialize()
-        // 地図上のクリックイベント
-        function initialize() {
-            console.log("イベントリスナーを設定します");
+            // 編集モードボタンのイベントリスナー
+            document.getElementById('editModeButton').addEventListener('click', () => {
+                try {
+                    const isEditMode = !state.isEditMode;
+                    stateManager.setState({
+                        isEditMode,
+                        currentTool: isEditMode ? state.currentTool : 'select',
+                        isDrawing: false,
+                        tempPoint: null,
+                        tempLinePoints: [],
+                        tempPolygonPoints: [],
+                    });
+                    UI.updateUI();
+                    renderData();
 
+                    if (state.debugMode) {
+                        console.info('編集モードが切り替えられました:', isEditMode);
+                    }
+                } catch (error) {
+                    console.error('editModeButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('編集モードの切り替え中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // ツールボタンのイベントリスナー
+            ['selectTool', 'pointTool', 'lineTool', 'polygonTool'].forEach(toolId => {
+                document.getElementById(toolId).addEventListener('click', () => {
+                    try {
+                        const toolName = toolId.replace('Tool', '');
+                        stateManager.setState({
+                            currentTool: toolName,
+                            isDrawing: false,
+                            tempPoint: null,
+                            tempLinePoints: [],
+                            tempPolygonPoints: [],
+                        });
+                        UI.updateUI();
+                        renderData();
+
+                        if (state.debugMode) {
+                            console.info(`${toolName} ツールが選択されました。`);
+                        }
+                    } catch (error) {
+                        console.error(`${toolId} のクリックイベントでエラーが発生しました:`, error);
+                        UI.showNotification('ツールの切り替え中にエラーが発生しました。', 'error');
+                    }
+                });
+            });
+
+            // 地図上のクリックイベントを設定
             const svg = d3.select('#map svg');
             if (!svg.empty()) {
                 svg.on('click', (event) => {
-                    console.log("SVG がクリックされました");
-                    if (State.isEditMode) {
-                        const [x, y] = d3.pointer(event);
-                        const transform = d3.zoomTransform(svg.node());
-                        const scaledX = (x - transform.x) / transform.k;
-                        const scaledY = (y - transform.y) / transform.k;
+                    try {
+                        const currentState = stateManager.getState();
+                        if (currentState.isEditMode) {
+                            const [x, y] = d3.pointer(event);
+                            const transform = d3.zoomTransform(svg.node());
+                            const scaledX = (x - transform.x) / transform.k;
+                            const scaledY = (y - transform.y) / transform.k;
 
-                        const mapWidth = MapModule.getMapWidth();
-                        const offsetXValue = Math.floor(scaledX / mapWidth) * mapWidth;
-                        const adjustedX = scaledX % mapWidth;
-                        const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
-                        const finalX = correctedX + offsetXValue;
+                            const mapWidth = MapModule.getMapWidth();
+                            const offsetXValue = Math.floor(scaledX / mapWidth) * mapWidth;
+                            const adjustedX = scaledX % mapWidth;
+                            const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
+                            const finalX = correctedX + offsetXValue;
 
-                        if (State.currentTool === 'point') {
-                            // 描画モードを開始
-                            State.isDrawing = true;
-                            State.tempPoint = {
-                                x: finalX,
-                                y: scaledY,
-                            };
-                            renderData(); // 一時的なポイントを表示
-
-                            // 編集フォームを表示
-                            UI.showEditForm(null, DataStore, renderData, State);
-                        } else if (State.currentTool === 'line') {
-                            UI.updateUI(State);
-                            if (!State.isDrawing) {
-                                State.isDrawing = true;
-                                State.tempLinePoints = [{ x: finalX, y: scaledY }];
-                            } else {
-                                State.tempLinePoints.push({ x: finalX, y: scaledY })
+                            if (currentState.currentTool === 'point') {
+                                stateManager.setState({
+                                    isDrawing: true,
+                                    tempPoint: {
+                                        x: finalX,
+                                        y: scaledY,
+                                    },
+                                });
+                                renderData(); // 一時的なポイントを表示
+                                UI.showEditForm(null, DataStore, renderData);
+                            } else if (currentState.currentTool === 'line') {
+                                if (!currentState.isDrawing) {
+                                    stateManager.setState({
+                                        isDrawing: true,
+                                        tempLinePoints: [{ x: finalX, y: scaledY }],
+                                    });
+                                } else {
+                                    const updatedPoints = [...currentState.tempLinePoints, { x: finalX, y: scaledY }];
+                                    stateManager.setState({ tempLinePoints: updatedPoints });
+                                }
+                                renderData();
+                            } else if (currentState.currentTool === 'polygon') {
+                                if (!currentState.isDrawing) {
+                                    stateManager.setState({
+                                        isDrawing: true,
+                                        tempPolygonPoints: [{ x: finalX, y: scaledY }],
+                                    });
+                                } else {
+                                    const updatedPoints = [...currentState.tempPolygonPoints, { x: finalX, y: scaledY }];
+                                    stateManager.setState({ tempPolygonPoints: updatedPoints });
+                                }
+                                renderData();
                             }
-                            renderData();
-                        } else if (State.currentTool === 'polygon') {
-                            UI.updateUI(State);
-                            if (!State.isDrawing) {
-                                State.isDrawing = true;
-                                State.tempPolygonPoints = [{ x: finalX, y: scaledY }];
-                            } else {
-                                State.tempPolygonPoints.push({ x: finalX, y: scaledY });
+
+                            if (state.debugMode) {
+                                console.info(`地図上でクリックが発生しました。ツール: ${currentState.currentTool}, 座標: (${finalX}, ${scaledY})`);
                             }
-                            renderData();
                         }
+                    } catch (error) {
+                        console.error('地図のクリックイベントでエラーが発生しました:', error);
+                        UI.showNotification('地図上での操作中にエラーが発生しました。', 'error');
                     }
                 });
 
                 // ダブルクリックで線や面の描画を完了
                 svg.on('dblclick.zoom', null);
                 svg.on('dblclick', (event) => {
-                    if (State.isEditMode && State.isDrawing) {
-                        if (State.currentTool === 'line' && State.tempLinePoints.length >= 2) {
-                            const newLine = {
-                                id: Date.now(),
-                                name: '新しい線',
-                                points: State.tempLinePoints.slice(),
-                                description: '',
-                                year: State.currentYear || 0,
-                            };
-                            DataStore.addLine(newLine);
-                            State.isDrawing = false;
-                            State.tempLinePoints = [];
-                            renderData();
-                            UI.showLineEditForm(newLine, DataStore, renderData, State, true);
-                        } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length >= 3) {
-                            const newPolygon = {
-                                id: Date.now(),
-                                name: '新しい面',
-                                points: State.tempPolygonPoints.slice(),
-                                description: '',
-                                year: State.currentYear || 0,
-                            };
-                            DataStore.addPolygon(newPolygon);
-                            State.isDrawing = false;
-                            State.tempPolygonPoints = [];
-                            renderData();
-                            UI.showPolygonEditForm(newPolygon, DataStore, renderData, State);
-                        } else {
-                            UI.showNotification('ポイントが足りません。', 'error');
+                    try {
+                        const currentState = stateManager.getState();
+                        if (currentState.isEditMode && currentState.isDrawing) {
+                            const currentYear = currentState.currentYear || 0;
+                            if (currentState.currentTool === 'line' && currentState.tempLinePoints.length >= 2) {
+                                const newLine = {
+                                    id: Date.now(),
+                                    points: currentState.tempLinePoints.slice(),
+                                    properties: [{
+                                        year: currentYear,
+                                        name: '新しい線',
+                                        description: '',
+                                    }],
+                                };
+                                DataStore.addLine(newLine);
+                                stateManager.setState({
+                                    isDrawing: false,
+                                    tempLinePoints: [],
+                                });
+                                renderData();
+                                UI.showLineEditForm(newLine, DataStore, renderData, true);
+                            } else if (currentState.currentTool === 'polygon' && currentState.tempPolygonPoints.length >= 3) {
+                                const newPolygon = {
+                                    id: Date.now(),
+                                    points: currentState.tempPolygonPoints.slice(),
+                                    properties: [{
+                                        year: currentYear,
+                                        name: '新しい面',
+                                        description: '',
+                                    }],
+                                };
+                                DataStore.addPolygon(newPolygon);
+                                stateManager.setState({
+                                    isDrawing: false,
+                                    tempPolygonPoints: [],
+                                });
+                                renderData();
+                                UI.showPolygonEditForm(newPolygon, DataStore, renderData, true);
+                            } else {
+                                UI.showNotification('ポイントが足りません。', 'error');
+                            }
+
+                            if (state.debugMode) {
+                                console.info(`地図上でダブルクリックが発生しました。ツール: ${currentState.currentTool}`);
+                            }
                         }
+                    } catch (error) {
+                        console.error('地図のダブルクリックイベントでエラーが発生しました:', error);
+                        UI.showNotification('描画の確定中にエラーが発生しました。', 'error');
                     }
                 });
             } else {
                 console.error('SVG 要素が見つかりません');
+                UI.showNotification('地図が正しく読み込まれていません。', 'error');
             }
 
-            // ドキュメントの状態を確認して、適切に処理を実行
-            if (document.readyState === 'loading') {
-                // まだ読み込み中の場合は、DOMContentLoaded イベントを待つ
-                document.addEventListener('DOMContentLoaded', initialize);
-            }
-        }
+            // 確定ボタンのイベントリスナー
+            document.getElementById('confirmDrawButton').addEventListener('click', () => {
+                try {
+                    const currentState = stateManager.getState();
+                    const currentYear = currentState.currentYear || 0;
+                    if (currentState.isEditMode && currentState.isDrawing) {
+                        if (currentState.currentTool === 'line' && currentState.tempLinePoints.length >= 2) {
+                            const newLine = {
+                                id: Date.now(),
+                                points: currentState.tempLinePoints.slice(),
+                                properties: [{
+                                    year: currentYear,
+                                    name: '新しい線',
+                                    description: '',
+                                }],
+                            };
+                            DataStore.addLine(newLine);
+                            stateManager.setState({
+                                isDrawing: false,
+                                tempLinePoints: [],
+                                tempPoint: null,
+                            });
+                            renderData();
+                            UI.showLineEditForm(newLine, DataStore, renderData, true);
+                        } else if (currentState.currentTool === 'polygon' && currentState.tempPolygonPoints.length >= 3) {
+                            const newPolygon = {
+                                id: Date.now(),
+                                points: currentState.tempPolygonPoints.slice(),
+                                properties: [{
+                                    year: currentYear,
+                                    name: '新しい面',
+                                    description: '',
+                                }],
+                            };
+                            DataStore.addPolygon(newPolygon);
+                            stateManager.setState({
+                                isDrawing: false,
+                                tempPolygonPoints: [],
+                                tempPoint: null,
+                            });
+                            renderData();
+                            UI.showPolygonEditForm(newPolygon, DataStore, renderData, true);
+                        } else {
+                            UI.showNotification('ポイントが足りません。', 'error');
+                        }
 
-        // 確定ボタンのイベントリスナー
-        document.getElementById('confirmDrawButton').addEventListener('click', () => {
-            if (State.isEditMode && State.isDrawing) {
-                if (State.currentTool === 'line' && State.tempLinePoints.length >= 2) {
-                    const newLine = {
-                        id: Date.now(),
-                        name: '新しい線',
-                        points: State.tempLinePoints.slice(),
-                        description: '',
-                        year: State.currentYear || 0, // 年次情報を追加
-                    };
-                    DataStore.addLine(newLine);
-                    renderData();
-                    UI.showLineEditForm(newLine, DataStore, renderData, State, true);
-                } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length >= 3) {
-                    const newPolygon = {
-                        id: Date.now(),
-                        name: '新しい面',
-                        points: State.tempPolygonPoints.slice(),
-                        description: '',
-                        year: State.currentYear || 0, // 年次情報を追加
-                    };
-                    DataStore.addPolygon(newPolygon);
-                    renderData();
-                    UI.showPolygonEditForm(newPolygon, DataStore, renderData, State);
-                } else {
-                    UI.showNotification('ポイントが足りません。', 'error');
-                }
-            }
-        });
-
-        // スライダーのイベントリスナーを追加
-        const timeSlider = document.getElementById('timeSlider');
-        const currentYearDisplay = document.getElementById('currentYear');
-
-        timeSlider.addEventListener('input', () => {
-            State.currentYear = parseInt(timeSlider.value, 10);
-            currentYearDisplay.textContent = `年: ${State.currentYear}`;
-            renderData();
-        });
-
-        // 保存・読み込みボタンのイベントリスナーや、IPC通信の設定
-        document.getElementById('saveButton').addEventListener('click', () => {
-            const dataToSave = {
-                points: DataStore.getPoints(),
-                lines: DataStore.getLines(),
-                polygons: DataStore.getPolygons(),
-            };
-            ipcRenderer.send('save-data', dataToSave);
-        });
-
-        document.getElementById('loadButton').addEventListener('click', () => {
-            if (DataStore.getPoints().length > 0 || DataStore.getLines().length > 0 || DataStore.getPolygons().length > 0) {
-                // 既存のデータがある場合、メインプロセスに確認ダイアログを表示するようにリクエスト
-                ipcRenderer.invoke('show-confirm-dialog', {
-                    message: '既存のデータがあります。新しいデータを読み込む前に、既存のデータを消去しますか？'
-                }).then((result) => {
-                    if (result) {
-                        // ユーザーが「はい」を選択した場合のみ、ファイル選択ダイアログを表示
-                        ipcRenderer.send('load-data');
+                        if (state.debugMode) {
+                            console.info('描画が確定されました。');
+                        }
                     }
-                }).catch((error) => {
-                    console.error('確認ダイアログの表示中にエラーが発生しました:', error);
-                });
-            } else {
-                // 既存のデータがない場合は、直接ファイル選択ダイアログを表示
-                ipcRenderer.send('load-data');
-            }
-        });
+                } catch (error) {
+                    console.error('confirmDrawButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('描画の確定中にエラーが発生しました。', 'error');
+                }
+            });
 
-        // メインプロセスからのデータ受信
-        ipcRenderer.on('load-data-reply', (event, data) => {
-            if (data) {
-                DataStore.getPoints().length = 0;
-                DataStore.getPoints().push(...(data.points || []));
-                DataStore.getLines().length = 0;
-                DataStore.getLines().push(...(data.lines || []));
-                DataStore.getPolygons().length = 0;
-                DataStore.getPolygons().push(...(data.polygons || []));
-                renderData();
-            } else {
-                UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
-            }
-        });
+            // スライダーのイベントリスナー
+            const timeSlider = document.getElementById('timeSlider');
+            const currentYearDisplay = document.getElementById('currentYear');
 
-        ipcRenderer.on('save-data-reply', (event, success) => {
-            if (success) {
-                UI.showNotification('データを正常に保存しました。');
-            } else {
-                UI.showNotification('データの保存中にエラーが発生しました。', 'error');
-            }
-        });
+            timeSlider.addEventListener('input', () => {
+                try {
+                    const newYear = parseInt(timeSlider.value, 10);
+                    stateManager.setState({ currentYear: newYear });
+                    currentYearDisplay.textContent = `年: ${newYear}`;
+                    renderData();
+
+                    if (state.debugMode) {
+                        console.info(`年が変更されました: ${newYear}`);
+                    }
+                } catch (error) {
+                    console.error('時間スライダーの変更中にエラーが発生しました:', error);
+                    UI.showNotification('時間の変更中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // 保存・読み込みボタンのイベントリスナーや、IPC通信の設定
+            document.getElementById('saveButton').addEventListener('click', () => {
+                try {
+                    const dataToSave = {
+                        points: DataStore.getAllPoints(),
+                        lines: DataStore.getAllLines(),
+                        polygons: DataStore.getAllPolygons(),
+                    };
+                    ipc.send('save-data', dataToSave);
+
+                    if (state.debugMode) {
+                        console.info('データの保存が開始されました。');
+                    }
+                } catch (error) {
+                    console.error('saveButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('データの保存中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // 読み込みボタンのクリックイベント内
+            document.getElementById('loadButton').addEventListener('click', () => {
+                try {
+                    if (DataStore.hasUnsavedChanges()) {
+                        ipc.invoke('show-confirm-dialog', {
+                            title: 'データの読み込み',
+                            message: '保存されていない変更があります。続行しますか？',
+                        }).then((result) => {
+                            if (result) {
+                                // データの読み込み処理
+                                ipc.send('load-data');
+                            }
+                        }).catch((error) => {
+                            console.error('確認ダイアログの表示中にエラーが発生しました:', error);
+                            UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                        });
+                    } else {
+                        ipc.send('load-data');
+                    }
+                } catch (error) {
+                    console.error('loadButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // メインプロセスからのデータ受信
+            ipc.on('load-data-reply', (data) => {
+                try {
+                    if (data) {
+                        DataStore.loadData(data);
+                        DataStore.resetUnsavedChanges();
+                        renderData();
+                        UI.showNotification('データが正常に読み込まれました。', 'info');
+                    } else {
+                        UI.showNotification('データの読み込みがキャンセルされました。', 'info');
+                    }
+                } catch (error) {
+                    console.error('load-data-reply イベントでエラーが発生しました:', error);
+                    UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                }
+            });
+
+            ipc.on('save-data-reply', (success) => {
+                try {
+                    if (success) {
+                        DataStore.resetUnsavedChanges();
+                        UI.showNotification('データが正常に保存されました。', 'info');
+
+                        if (state.debugMode) {
+                            console.info('データの保存が完了しました。');
+                        }
+                    } else {
+                        UI.showNotification('データの保存中にエラーが発生しました。', 'error');
+                    }
+                } catch (error) {
+                    console.error('save-data-reply イベントでエラーが発生しました:', error);
+                    UI.showNotification('データの保存中にエラーが発生しました。', 'error');
+                }
+            });
+
+        } catch (error) {
+            console.error('setupEventListeners 関数内でエラーが発生しました:', error);
+            UI.showNotification('イベントリスナーの設定中にエラーが発生しました。', 'error');
+        }
     }
 
     return {
@@ -237,4 +349,4 @@ const EventHandlers = (() => {
     };
 })();
 
-module.exports = EventHandlers;
+export default EventHandlers;

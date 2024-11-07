@@ -1,6 +1,6 @@
 // map.js
 
-const path = require('path');
+import stateManager from './stateManager.js';
 
 const MapModule = (() => {
     let svg;
@@ -8,305 +8,452 @@ const MapModule = (() => {
     let mapWidth = 1000;
     let mapHeight = 800;
 
-    // モジュールスコープで保持する変数
-    let State;
     let DataStore;
     let UI;
 
-    function loadMap(_State, _DataStore, _UI, renderData) {
+    function loadMap(_DataStore, _UI, renderData) {
         return new Promise((resolve, reject) => {
-            State = _State;
-            DataStore = _DataStore;
-            UI = _UI;
+            try {
+                DataStore = _DataStore;
+                UI = _UI;
 
-            svg = d3.select('#map')
-                .append('svg')
-                .attr('width', '100%')
-                .attr('height', '100%');
-            console.log("SVG読み込みOK")
-            zoomGroup = svg.append('g');
+                svg = d3.select('#map')
+                    .append('svg')
+                    .attr('width', '100%')
+                    .attr('height', '100%');
 
-            const zoom = d3.zoom()
-                .scaleExtent([1, 50])
-                .on('zoom', (event) => {
-                    const { x, y, k } = event.transform;
+                zoomGroup = svg.append('g');
 
-                    let dx = ((x % (mapWidth * k)) + (mapWidth * k)) % (mapWidth * k);
+                const zoom = d3.zoom()
+                    .scaleExtent([1, 50])
+                    .on('zoom', (event) => {
+                        try {
+                            if (stateManager.getState().debugMode) {
+                                console.info('ズームイベントが発生しました。');
+                            }
 
-                    const minY = - (mapHeight * (k - 1));
-                    const maxY = 0;
-                    let dy = Math.max(Math.min(y, maxY), minY);
+                            const { x, y, k } = event.transform;
 
-                    zoomGroup.attr('transform', `translate(${dx}, ${dy}) scale(${k})`);
-                });
+                            let dx = ((x % (mapWidth * k)) + (mapWidth * k)) % (mapWidth * k);
 
-            svg.call(zoom);
+                            const minY = - (mapHeight * (k - 1));
+                            const maxY = 0;
+                            let dy = Math.max(Math.min(y, maxY), minY);
 
-            d3.xml(path.join(__dirname, 'map.svg')).then((xml) => {
-                const mapSvg = xml.documentElement;
+                            zoomGroup.attr('transform', `translate(${dx}, ${dy}) scale(${k})`);
+                        } catch (error) {
+                            console.error('ズームイベント中にエラーが発生しました:', error);
+                        }
+                    });
 
-                const viewBox = mapSvg.getAttribute('viewBox');
-                if (viewBox) {
-                    const viewBoxValues = viewBox.split(' ').map(Number);
-                    if (viewBoxValues.length === 4) {
-                        mapWidth = viewBoxValues[2];
-                        mapHeight = viewBoxValues[3];
+                svg.call(zoom);
+
+                const mapSvgUrl = 'map.svg';
+
+                d3.xml(mapSvgUrl).then((xml) => {
+                    try {
+                        const mapSvg = xml.documentElement;
+
+                        const viewBox = mapSvg.getAttribute('viewBox');
+                        if (viewBox) {
+                            const viewBoxValues = viewBox.split(' ').map(Number);
+                            if (viewBoxValues.length === 4) {
+                                mapWidth = viewBoxValues[2];
+                                mapHeight = viewBoxValues[3];
+                            }
+                        } else {
+                            mapWidth = parseFloat(mapSvg.getAttribute('width')) || mapWidth;
+                            mapHeight = parseFloat(mapSvg.getAttribute('height')) || mapHeight;
+                        }
+
+                        for (let i = -1; i <= 2; i++) {
+                            const mapClone = mapSvg.cloneNode(true);
+                            const mapGroup = zoomGroup.append('g')
+                                .attr('transform', `translate(${i * mapWidth}, 0)`);
+                            mapGroup.node().appendChild(mapClone);
+                        }
+
+                        svg.attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
+                            .attr('preserveAspectRatio', 'xMidYMid meet');
+
+                        renderData();
+
+                        if (stateManager.getState().debugMode) {
+                            console.info('地図が正常に読み込まれました。');
+                        }
+
+                        resolve();
+                    } catch (error) {
+                        console.error('地図の初期化中にエラーが発生しました:', error);
+                        UI.showNotification('地図の初期化中にエラーが発生しました。', 'error');
+                        reject(error);
                     }
-                } else {
-                    mapWidth = parseFloat(mapSvg.getAttribute('width')) || mapWidth;
-                    mapHeight = parseFloat(mapSvg.getAttribute('height')) || mapHeight;
-                }
-
-                for (let i = -1; i <= 2; i++) {
-                    const mapClone = mapSvg.cloneNode(true);
-                    const mapGroup = zoomGroup.append('g')
-                        .attr('transform', `translate(${i * mapWidth}, 0)`);
-                    mapGroup.node().appendChild(mapClone);
-                }
-
-                svg.attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
-                    .attr('preserveAspectRatio', 'xMidYMid meet');
-
-                renderData();
-
-                // 成功時に resolve を呼び出す
-                resolve();
-            }).catch((error) => {
-                console.error('SVGファイルの読み込みエラー:', error);
+                }).catch((error) => {
+                    console.error('SVGファイルの読み込みエラー:', error);
+                    UI.showNotification('地図の読み込み中にエラーが発生しました。', 'error');
+                    reject(error);
+                });
+            } catch (error) {
+                console.error('loadMap 関数内でエラーが発生しました:', error);
                 UI.showNotification('地図の読み込み中にエラーが発生しました。', 'error');
-                // エラー時に reject を呼び出す
                 reject(error);
-            });
+            }
         });
     }
 
     function renderData() {
-        // 既存のデータと一時的な描画を削除
-        zoomGroup.selectAll('.data-group').remove();
-        zoomGroup.selectAll('.tempLine').remove();  // 一時的な線を削除
-        zoomGroup.selectAll('.tempPolygon').remove();  // 一時的な面を削除
+        try {
+            const state = stateManager.getState();
 
-        const dataGroup = zoomGroup.append('g')
-            .attr('class', 'data-group');
+            if (state.debugMode) {
+                console.info('renderData() が呼び出されました。');
+            }
 
-        const currentYear = State.currentYear || 0;
-        const mapCopies = [-1, 0, 1];
+            // 既存のデータと一時的な描画を削除
+            zoomGroup.selectAll('.data-group').remove();
+            zoomGroup.selectAll('.temp-feature-group').remove();
 
-        mapCopies.forEach(offset => {
-            const offsetX = offset * mapWidth;
+            const dataGroup = zoomGroup.append('g')
+                .attr('class', 'data-group');
 
-            // 仮のポイントの描画
-            if (State.tempPoint) {
-                drawTemporaryPoint();
+            const currentYear = state.currentYear || 0;
+
+            // データの取得
+            const points = DataStore.getPoints(currentYear);
+            const lines = DataStore.getLines(currentYear);
+            const polygons = DataStore.getPolygons(currentYear);
+
+            const mapCopies = [-1, 0, 1, 2];
+
+            // 要素を複製する関数
+            function duplicateFeature(feature, offsetX) {
+                const duplicates = [];
+                const originalX = feature.x !== undefined ? feature.x : feature.points[0].x;
+                const positions = [originalX, originalX - mapWidth, originalX + mapWidth];
+
+                positions.forEach(posX => {
+                    if (posX + offsetX >= 0 && posX + offsetX <= mapWidth * mapCopies.length) {
+                        const duplicatedFeature = { ...feature };
+                        if (duplicatedFeature.x !== undefined) {
+                            duplicatedFeature.x = posX + offsetX;
+                        } else {
+                            duplicatedFeature.points = duplicatedFeature.points.map(p => ({ x: p.x + offsetX, y: p.y }));
+                        }
+                        duplicates.push(duplicatedFeature);
+                    }
+                });
+                return duplicates;
+            }
+
+            mapCopies.forEach(offset => {
+                try {
+                    const offsetX = offset * mapWidth;
+
+                    // フィーチャーの座標をオフセットし、必要に応じて複製
+                    let adjustedPoints = [];
+                    points.forEach(point => {
+                        adjustedPoints.push(...duplicateFeature(point, offsetX));
+                    });
+
+                    let adjustedLines = [];
+                    lines.forEach(line => {
+                        adjustedLines.push(...duplicateFeature(line, offsetX));
+                    });
+
+                    let adjustedPolygons = [];
+                    polygons.forEach(polygon => {
+                        adjustedPolygons.push(...duplicateFeature(polygon, offsetX));
+                    });
+
+                    // ポイントの描画
+                    drawFeatures(dataGroup, {
+                        data: adjustedPoints,
+                        className: `point-${offset}`,
+                        elementType: 'circle',
+                        attributes: {
+                            cx: d => d.x,
+                            cy: d => d.y,
+                            r: 5,
+                            fill: 'red'
+                        },
+                        eventHandlers: {
+                            mouseover: (event, d) => UI.showTooltip(event, d),
+                            mousemove: UI.moveTooltip,
+                            mouseout: UI.hideTooltip,
+                            click: (event, d) => {
+                                event.stopPropagation();
+                                const currentState = stateManager.getState();
+                                if (currentState.isEditMode) {
+                                    UI.showEditForm(d, DataStore, renderData);
+                                } else {
+                                    UI.showDetailWindow(d);
+                                }
+                            }
+                        }
+                    });
+
+                    // ラインの描画
+                    drawFeatures(dataGroup, {
+                        data: adjustedLines,
+                        className: `line-${offset}`,
+                        elementType: 'path',
+                        attributes: {
+                            d: d => {
+                                return d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)(d.points);
+                            },
+                            stroke: 'blue',
+                            'stroke-width': 2,
+                            fill: 'none'
+                        },
+                        eventHandlers: {
+                            mouseover: (event, d) => UI.showTooltip(event, d),
+                            mousemove: UI.moveTooltip,
+                            mouseout: UI.hideTooltip,
+                            click: (event, d) => {
+                                event.stopPropagation();
+                                const currentState = stateManager.getState();
+                                if (currentState.isEditMode) {
+                                    UI.showLineEditForm(d, DataStore, renderData);
+                                } else {
+                                    UI.showDetailWindow(d);
+                                }
+                            }
+                        }
+                    });
+
+                    // ポリゴンの描画
+                    drawFeatures(dataGroup, {
+                        data: adjustedPolygons,
+                        className: `polygon-${offset}`,
+                        elementType: 'path',
+                        attributes: {
+                            d: d => {
+                                return d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)
+                                    .curve(d3.curveLinearClosed)(d.points);
+                            },
+                            stroke: 'green',
+                            'stroke-width': 2,
+                            fill: 'rgba(0, 255, 0, 0.3)'
+                        },
+                        eventHandlers: {
+                            mouseover: (event, d) => UI.showTooltip(event, d),
+                            mousemove: UI.moveTooltip,
+                            mouseout: UI.hideTooltip,
+                            click: (event, d) => {
+                                event.stopPropagation();
+                                const currentState = stateManager.getState();
+                                if (currentState.isEditMode) {
+                                    UI.showPolygonEditForm(d, DataStore, renderData);
+                                } else {
+                                    UI.showDetailWindow(d);
+                                }
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error(`mapCopies のループ内でエラーが発生しました（オフセット: ${offset}）:`, error);
+                }
+            });
+
+            // 一時的なフィーチャーの描画（必要に応じて修正）
+            if (state.isDrawing || (state.currentTool === 'point' && state.tempPoint)) {
+                drawTemporaryFeatures();
+            }
+        } catch (error) {
+            console.error('renderData 関数内でエラーが発生しました:', error);
+        }
+    }
+
+    // drawFeatures 関数の定義
+    function drawFeatures(dataGroup, { data, className, elementType, attributes, eventHandlers }) {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info(`drawFeatures() が呼び出されました。クラス名: ${className}`);
+            }
+
+            const selection = dataGroup.selectAll(`.${className}`)
+                .data(data, d => d.id); // キー関数を d.id に設定
+
+            // Enter セレクション
+            const enterSelection = selection.enter()
+                .append(elementType)
+                .attr('class', className);
+
+            // 属性とイベントハンドラを設定
+            enterSelection.each(function (d) {
+                const element = d3.select(this);
+                for (const [attrName, attrValue] of Object.entries(attributes)) {
+                    element.attr(attrName, typeof attrValue === 'function' ? attrValue(d) : attrValue);
+                }
+                for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
+                    element.on(eventName, eventHandler);
+                }
+            });
+
+            // Update セレクション
+            const updateSelection = selection
+                .transition()
+                .duration(200); // アニメーションの追加（必要に応じて）
+
+            updateSelection.each(function (d) {
+                const element = d3.select(this);
+                for (const [attrName, attrValue] of Object.entries(attributes)) {
+                    element.attr(attrName, typeof attrValue === 'function' ? attrValue(d) : attrValue);
+                }
+            });
+
+            // Exit セレクション
+            selection.exit()
+                .transition()
+                .duration(200)
+                .remove();
+
+        } catch (error) {
+            console.error(`drawFeatures 関数内でエラーが発生しました（クラス名: ${className}）:`, error);
+        }
+    }
+
+    function drawTemporaryFeatures() {
+        try {
+            const state = stateManager.getState();
+            let tempGroup = zoomGroup.select('.temp-feature-group');
+
+            if (tempGroup.empty()) {
+                tempGroup = zoomGroup.append('g').attr('class', 'temp-feature-group');
             } else {
-                // 仮のポイントがない場合、既存の仮ポイントを削除
-                zoomGroup.selectAll('.tempPoint').remove();
+                tempGroup.selectAll('*').remove();
             }
 
-            // ポイントの描画
-            dataGroup.selectAll(`.point-${offset}`)
-                .data(DataStore.getPoints(currentYear), d => d.id)
-                .join(
-                    enter => enter.append('circle')
-                        .attr('class', `point-${offset}`)
-                        .attr('cx', d => d.x + offsetX)
-                        .attr('cy', d => d.y)
-                        .attr('r', 5)
-                        .attr('fill', 'red')
-                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
-                        .on('mousemove', UI.moveTooltip)
-                        .on('mouseout', UI.hideTooltip)
-                        .on('click', (event, d) => {
-                            event.stopPropagation();
-                            if (State.isEditMode) {
-                                UI.showEditForm(d, DataStore, renderData, State);
-                            } else {
-                                UI.showDetailWindow(d);
-                            }
-                        }),
-                    update => update
-                        .attr('cx', d => d.x + offsetX)
-                        .attr('cy', d => d.y),
-                    exit => exit.remove()
-                );
+            const mapCopies = [-1, 0, 1, 2];
 
-            // ラインの描画
-            dataGroup.selectAll(`.line-${offset}`)
-                .data(DataStore.getLines(currentYear), d => d.id)
-                .join(
-                    enter => enter.append('path')
-                        .attr('class', `line line-${offset}`)
-                        .attr('d', d => {
-                            const linePoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)(linePoints);
-                        })
-                        .attr('stroke', 'blue')
-                        .attr('stroke-width', 2)
-                        .attr('fill', 'none')
-                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
-                        .on('mousemove', UI.moveTooltip)
-                        .on('mouseout', UI.hideTooltip)
-                        .on('click', (event, d) => {
-                            event.stopPropagation();
-                            if (State.isEditMode) {
-                                UI.showLineEditForm(d, DataStore, renderData, State);
-                            } else {
-                                UI.showDetailWindow(d);
-                            }
-                        }),
-                    update => update
-                        .attr('d', d => {
-                            const linePoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)(linePoints);
-                        }),
-                    exit => exit.remove()
-                );
+            mapCopies.forEach(offset => {
+                try {
+                    const offsetX = offset * mapWidth;
 
-            // ポリゴンの描画
-            dataGroup.selectAll(`.polygon-${offset}`)
-                .data(DataStore.getPolygons(currentYear), d => d.id)
-                .join(
-                    enter => enter.append('path')
-                        .attr('class', `polygon polygon-${offset}`)
-                        .attr('d', d => {
-                            const polygonPoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)
-                                .curve(d3.curveLinearClosed)(polygonPoints);
-                        })
-                        .attr('stroke', 'green')
-                        .attr('stroke-width', 2)
-                        .attr('fill', 'rgba(0, 255, 0, 0.3)')
-                        .on('mouseover', (event, d) => UI.showTooltip(event, d, State))
-                        .on('mousemove', UI.moveTooltip)
-                        .on('mouseout', UI.hideTooltip)
-                        .on('click', (event, d) => {
-                            event.stopPropagation();
-                            if (State.isEditMode) {
-                                UI.showPolygonEditForm(d, DataStore, renderData, State);
-                            } else {
-                                UI.showDetailWindow(d);
+                    if (state.currentTool === 'point' && state.tempPoint) {
+                        drawTemporaryFeature(tempGroup, {
+                            data: [{ x: state.tempPoint.x + offsetX, y: state.tempPoint.y }],
+                            className: `tempPoint-${offset}`,
+                            elementType: 'circle',
+                            attributes: {
+                                cx: d => d.x,
+                                cy: d => d.y,
+                                r: 5,
+                                fill: 'orange'
                             }
-                        }),
-                    update => update
-                        .attr('d', d => {
-                            const polygonPoints = d.points.map(p => ({
-                                x: p.x + offsetX,
-                                y: p.y
-                            }));
-                            return d3.line()
-                                .x(p => p.x)
-                                .y(p => p.y)
-                                .curve(d3.curveLinearClosed)(polygonPoints);
-                        }),
-                    exit => exit.remove()
-                );
-        });
+                        });
+                    } else if (state.currentTool === 'line' && state.tempLinePoints.length > 0) {
+                        const tempLinePointsWithOffset = state.tempLinePoints.map(p => ({
+                            x: p.x + offsetX,
+                            y: p.y
+                        }));
 
-        // 仮の線と面、ポイントの描画
-        if (State.isDrawing) {
-            if (State.currentTool === 'line') {
-                drawTemporaryLine();
-            } else if (State.currentTool === 'polygon') {
-                drawTemporaryPolygon();
-            }
-            drawTemporaryPoint(); // 常に仮のポイントを描画
-        } else if (State.currentTool === 'point' && State.tempPoint) {
-            drawTemporaryPoint();
+                        drawTemporaryFeature(tempGroup, {
+                            data: [tempLinePointsWithOffset],
+                            className: `tempLine-${offset}`,
+                            elementType: 'path',
+                            attributes: {
+                                d: d => d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)(d)
+                            },
+                            style: {
+                                stroke: 'orange',
+                                'stroke-width': 2,
+                                fill: 'none'
+                            }
+                        });
+
+                        drawTemporaryFeature(tempGroup, {
+                            data: tempLinePointsWithOffset,
+                            className: `tempPoint-${offset}`,
+                            elementType: 'circle',
+                            attributes: {
+                                cx: d => d.x,
+                                cy: d => d.y,
+                                r: 5,
+                                fill: 'orange'
+                            }
+                        });
+                    } else if (state.currentTool === 'polygon' && state.tempPolygonPoints.length > 0) {
+                        const tempPolygonPointsWithOffset = state.tempPolygonPoints.map(p => ({
+                            x: p.x + offsetX,
+                            y: p.y
+                        }));
+
+                        drawTemporaryFeature(tempGroup, {
+                            data: [tempPolygonPointsWithOffset],
+                            className: `tempPolygon-${offset}`,
+                            elementType: 'path',
+                            attributes: {
+                                d: d => d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)
+                                    .curve(d3.curveLinearClosed)(d)
+                            },
+                            style: {
+                                stroke: 'orange',
+                                'stroke-width': 2,
+                                fill: 'rgba(255, 165, 0, 0.3)'
+                            }
+                        });
+
+                        drawTemporaryFeature(tempGroup, {
+                            data: tempPolygonPointsWithOffset,
+                            className: `tempPoint-${offset}`,
+                            elementType: 'circle',
+                            attributes: {
+                                cx: d => d.x,
+                                cy: d => d.y,
+                                r: 5,
+                                fill: 'orange'
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error(`drawTemporaryFeatures のループ内でエラーが発生しました（オフセット: ${offset}）:`, error);
+                }
+            });
+        } catch (error) {
+            console.error('drawTemporaryFeatures 関数内でエラーが発生しました:', error);
         }
     }
 
-    function drawTemporaryPoint() {
-        zoomGroup.selectAll('.tempPoint').remove();
+    function drawTemporaryFeature(group, { data, className, elementType, attributes, style }) {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info(`drawTemporaryFeature() が呼び出されました。クラス名: ${className}`);
+            }
 
-        const mapCopies = [-1, 0, 1, 2];
+            const tempGroup = group.append('g')
+                .attr('class', 'temp-feature');
 
-        // 現在のツールに応じて、一時的なポイントを取得
-        let tempPoints = [];
-        if (State.currentTool === 'line' && State.tempLinePoints.length > 0) {
-            tempPoints = [State.tempLinePoints[State.tempLinePoints.length - 1]];
-        } else if (State.currentTool === 'polygon' && State.tempPolygonPoints.length > 0) {
-            tempPoints = [State.tempPolygonPoints[State.tempPolygonPoints.length - 1]];
-        } else if (State.currentTool === 'point' && State.tempPoint) {
-            tempPoints = [State.tempPoint];
-        }
-
-        mapCopies.forEach(offset => {
-            const offsetX = offset * mapWidth;
-
-            zoomGroup.selectAll(`.tempPoint-${offset}`)
-                .data(tempPoints)
+            const elements = tempGroup.selectAll(`.${className}`)
+                .data(data)
                 .enter()
-                .append('circle')
-                .attr('class', `tempPoint tempPoint-${offset}`)
-                .attr('cx', d => d.x + offsetX)
-                .attr('cy', d => d.y)
-                .attr('r', 5)
-                .attr('fill', 'orange');
-        });
-    }
+                .append(elementType)
+                .attr('class', className);
 
-    function drawTemporaryLine() {
-        zoomGroup.selectAll('.tempLine').remove();
+            if (elementType === 'path') {
+                elements.attr('d', d => attributes.d(d));
+            } else {
+                for (const [attrName, attrValue] of Object.entries(attributes)) {
+                    elements.attr(attrName, typeof attrValue === 'function' ? attrValue : attrValue);
+                }
+            }
 
-        const mapCopies = [-1, 0, 1, 2];
-
-        mapCopies.forEach(offset => {
-            const offsetX = offset * mapWidth;
-
-            zoomGroup.append('path')
-                .datum(State.tempLinePoints.map(p => ({
-                    x: p.x + offsetX,
-                    y: p.y
-                })))
-                .attr('class', 'tempLine')
-                .attr('d', d3.line()
-                    .x(d => d.x)
-                    .y(d => d.y)
-                )
-                .attr('stroke', 'orange')
-                .attr('stroke-width', 2)
-                .attr('fill', 'none');
-        });
-    }
-
-    function drawTemporaryPolygon() {
-        zoomGroup.selectAll('.tempPolygon').remove();
-
-        const mapCopies = [-1, 0, 1, 2];
-
-        mapCopies.forEach(offset => {
-            const offsetX = offset * mapWidth;
-
-            zoomGroup.append('path')
-                .datum(State.tempPolygonPoints.map(p => ({
-                    x: p.x + offsetX,
-                    y: p.y
-                })))
-                .attr('class', 'tempPolygon')
-                .attr('d', d3.line()
-                    .x(d => d.x)
-                    .y(d => d.y)
-                    .curve(d3.curveLinearClosed)
-                )
-                .attr('stroke', 'orange')
-                .attr('stroke-width', 2)
-                .attr('fill', 'rgba(255, 165, 0, 0.3)');
-        });
+            if (style) {
+                for (const [styleName, styleValue] of Object.entries(style)) {
+                    elements.style(styleName, styleValue);
+                }
+            }
+        } catch (error) {
+            console.error(`drawTemporaryFeature 関数内でエラーが発生しました（クラス名: ${className}）:`, error);
+        }
     }
 
     return {
@@ -317,4 +464,4 @@ const MapModule = (() => {
     };
 })();
 
-module.exports = MapModule;
+export default MapModule;

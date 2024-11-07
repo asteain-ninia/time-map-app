@@ -10,12 +10,21 @@
 </head>
 
 <body>
+  <!-- ツールバー -->
   <div id="toolbar">
-    <button id="editModeButton">編集モード: OFF</button>
-    <button id="saveButton">保存</button>
-    <button id="loadButton">読み込み</button>
+    <div class="left-buttons">
+      <button id="editModeButton">編集モード: OFF</button>
+    </div>
+    <div class="center-buttons">
+      <!-- 必要なら中央に配置するボタンをここに置く -->
+    </div>
+    <div class="right-buttons">
+      <button id="saveButton">保存</button>
+      <button id="loadButton">読み込み</button>
+    </div>
   </div>
 
+  <!-- メインコンテナ -->
   <div id="mainContainer">
     <div id="mapContainer">
       <div id="map"></div>
@@ -23,6 +32,30 @@
     <div id="sidebar">
       <h2>イベント一覧</h2>
       <ul id="eventList"></ul>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <div id="footer">
+    <div class="left-controls">
+      <div id="tools" style="display: none;">
+        <button id="selectTool">選択</button>
+        <button id="pointTool">ポイント</button>
+        <button id="lineTool">ライン</button>
+        <button id="polygonTool">ポリゴン</button>
+      </div>
+      <div id="drawControls" style="display: none;">
+        <button id="confirmDrawButton">確定</button>
+      </div>
+    </div>
+    <div class="center-controls">
+      <!-- 中央に配置する要素があればここに -->
+    </div>
+    <div class="right-controls">
+      <div id="timeSliderContainer">
+        <span id="currentYear">年: 0</span>
+        <input type="range" id="timeSlider" min="0" max="10000" value="0">
+      </div>
     </div>
   </div>
 
@@ -73,29 +106,12 @@
     <button id="closeDetailButton">閉じる</button>
   </div>
 
-  <!-- ツールボタンと時間スライダーをフッターに移動 -->
-  <div id="footer">
-    <div id="tools" style="display: none;">
-      <button id="selectTool">選択</button>
-      <button id="pointTool">ポイント</button>
-      <button id="lineTool">ライン</button>
-      <button id="polygonTool">ポリゴン</button>
-    </div>
-    <div id="drawControls">
-      <button id="confirmDrawButton">確定</button>
-    </div>
-
-    <div id="timeSliderContainer">
-      <input type="range" id="timeSlider" min="0" max="10000" value="0">
-      <span id="currentYear">年: 0</span>
-    </div>
-  </div>
-
+  <!-- ツールチップ -->
   <div id="tooltip"></div>
 
   <!-- スクリプトの読み込み -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script src="renderer.js"></script>
+  <script src="renderer.js" type="module"></script>
 </body>
 
 </html>

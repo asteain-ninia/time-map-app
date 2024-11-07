@@ -1,131 +1,402 @@
 // dataStore.js
 
+import { getPropertiesForYear } from './utils.js';
+import stateManager from './stateManager.js';
+
 const DataStore = (() => {
-    let points = [];
-    let lines = [];
-    let polygons = [];
+    const points = new Map();
+    const lines = new Map();
+    const polygons = new Map();
+    let unsavedChanges = false;
 
-    // 年次に応じたポイントの取得
     function getPoints(year) {
-        return points
-            .map(point => {
-                const properties = getPropertiesForYear(point.properties, year);
-                if (properties) {
-                    return { ...point, ...properties };
-                } else {
-                    return null;
-                }
-            })
-            .filter(point => point !== null);
-    }
-
-    // 年次に応じたラインの取得
-    function getLines(year) {
-        return lines
-            .map(line => {
-                const properties = getPropertiesForYear(line.properties, year);
-                if (properties) {
-                    return { ...line, ...properties };
-                } else {
-                    return null;
-                }
-            })
-            .filter(line => line !== null);
-    }
-
-    // 年次に応じたポリゴンの取得
-    function getPolygons(year) {
-        return polygons
-            .map(polygon => {
-                const properties = getPropertiesForYear(polygon.properties, year);
-                if (properties) {
-                    return { ...polygon, ...properties };
-                } else {
-                    return null;
-                }
-            })
-            .filter(polygon => polygon !== null);
-    }
-
-    // 指定された年のプロパティを取得
-    function getPropertiesForYear(propertiesArray, year) {
-        if (!propertiesArray || propertiesArray.length === 0) return null;
-        const sortedProperties = propertiesArray.sort((a, b) => a.year - b.year);
-        let currentProperties = null;
-        for (const prop of sortedProperties) {
-            if (prop.year <= year) {
-                currentProperties = prop;
-            } else {
-                break;
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('getPoints() が呼び出されました。年:', year);
             }
+
+            return Array.from(points.values())
+                .map(point => {
+                    console.log('処理中のポイント:', point);
+
+                    let properties = null;
+
+                    // 'properties' フィールドが存在し、配列の場合
+                    if (point.properties && Array.isArray(point.properties)) {
+                        properties = getPropertiesForYear(point.properties, year);
+                    } else {
+                        // 'properties' がない場合でも、ポイントに直接 'year', 'name', 'description' があるか確認
+                        if (point.year !== undefined) {
+                            properties = {
+                                year: point.year,
+                                name: point.name,
+                                description: point.description,
+                            };
+                        } else {
+                            // 'year' がない場合はデフォルト値を設定
+                            properties = {
+                                year: 0,
+                                name: point.name || '不明なポイント',
+                                description: point.description || '',
+                            };
+                        }
+                    }
+
+                    console.log('取得されたプロパティ:', properties);
+
+                    if (properties) {
+                        return {
+                            id: point.id,
+                            x: point.x,
+                            y: point.y,
+                            ...properties,
+                        };
+                    } else {
+                        return null;
+                    }
+                })
+                .filter(point => point !== null);
+        } catch (error) {
+            console.error('getPoints 関数内でエラーが発生しました:', error);
+            return [];
         }
-        return currentProperties;
     }
 
-    // 新しいポイントを追加
+    function getLines(year) {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('getLines() が呼び出されました。年:', year);
+            }
+
+            return Array.from(lines.values())
+                .map(line => {
+                    console.log('処理中のライン:', line);
+
+                    let properties = null;
+
+                    if (line.properties && Array.isArray(line.properties)) {
+                        properties = getPropertiesForYear(line.properties, year);
+                    } else {
+                        if (line.year !== undefined) {
+                            properties = {
+                                year: line.year,
+                                name: line.name,
+                                description: line.description,
+                            };
+                        } else {
+                            properties = {
+                                year: 0,
+                                name: line.name || '不明なライン',
+                                description: line.description || '',
+                            };
+                        }
+                    }
+
+                    console.log('取得されたプロパティ:', properties);
+
+                    if (properties) {
+                        return {
+                            id: line.id,
+                            points: line.points,
+                            ...properties,
+                        };
+                    } else {
+                        return null;
+                    }
+                })
+                .filter(line => line !== null);
+        } catch (error) {
+            console.error('getLines 関数内でエラーが発生しました:', error);
+            return [];
+        }
+    }
+
+    function getPolygons(year) {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('getPolygons() が呼び出されました。年:', year);
+            }
+
+            return Array.from(polygons.values())
+                .map(polygon => {
+                    console.log('処理中のポリゴン:', polygon);
+
+                    let properties = null;
+
+                    if (polygon.properties && Array.isArray(polygon.properties)) {
+                        properties = getPropertiesForYear(polygon.properties, year);
+                    } else {
+                        if (polygon.year !== undefined) {
+                            properties = {
+                                year: polygon.year,
+                                name: polygon.name,
+                                description: polygon.description,
+                            };
+                        } else {
+                            properties = {
+                                year: 0,
+                                name: polygon.name || '不明なポリゴン',
+                                description: polygon.description || '',
+                            };
+                        }
+                    }
+
+                    console.log('取得されたプロパティ:', properties);
+
+                    if (properties) {
+                        return {
+                            id: polygon.id,
+                            points: polygon.points,
+                            ...properties,
+                        };
+                    } else {
+                        return null;
+                    }
+                })
+                .filter(polygon => polygon !== null);
+        } catch (error) {
+            console.error('getPolygons 関数内でエラーが発生しました:', error);
+            return [];
+        }
+    }
+
+    function getAllPoints() {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('getAllPoints() が呼び出されました。');
+            }
+
+            return Array.from(points.values());
+        } catch (error) {
+            console.error('getAllPoints 関数内でエラーが発生しました:', error);
+            return [];
+        }
+    }
+
+    function getAllLines() {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('getAllLines() が呼び出されました。');
+            }
+
+            return Array.from(lines.values());
+        } catch (error) {
+            console.error('getAllLines 関数内でエラーが発生しました:', error);
+            return [];
+        }
+    }
+
+    function getAllPolygons() {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('getAllPolygons() が呼び出されました。');
+            }
+
+            return Array.from(polygons.values());
+        } catch (error) {
+            console.error('getAllPolygons 関数内でエラーが発生しました:', error);
+            return [];
+        }
+    }
+
     function addPoint(point) {
-        if (!point.properties) {
-            point.properties = [];
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('addPoint() が呼び出されました。ポイントID:', point.id);
+                console.log('追加されるポイント:', point);
+            }
+
+            if (!point.properties || !Array.isArray(point.properties)) {
+                point.properties = [];
+            }
+            points.set(point.id, point);
+            unsavedChanges = true;
+        } catch (error) {
+            console.error('addPoint 関数内でエラーが発生しました:', error);
         }
-        points.push(point);
     }
 
-    // ポイントを更新（新しいプロパティを追加）
     function updatePoint(updatedPoint) {
-        const index = points.findIndex(point => point.id === updatedPoint.id);
-        if (index !== -1) {
-            points[index] = updatedPoint;
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('updatePoint() が呼び出されました。ポイントID:', updatedPoint.id);
+            }
+
+            if (points.has(updatedPoint.id)) {
+                points.set(updatedPoint.id, updatedPoint);
+                unsavedChanges = true;
+            }
+        } catch (error) {
+            console.error('updatePoint 関数内でエラーが発生しました:', error);
         }
     }
 
-    // 新しいラインを追加
     function addLine(line) {
-        lines.push(line);
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('addLine() が呼び出されました。ラインID:', line.id);
+            }
+
+            lines.set(line.id, line);
+            unsavedChanges = true;
+        } catch (error) {
+            console.error('addLine 関数内でエラーが発生しました:', error);
+        }
     }
 
-    // ラインを更新
     function updateLine(updatedLine) {
-        const index = lines.findIndex(line => line.id === updatedLine.id);
-        if (index !== -1) {
-            lines[index] = updatedLine;
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('updateLine() が呼び出されました。ラインID:', updatedLine.id);
+            }
+
+            if (lines.has(updatedLine.id)) {
+                lines.set(updatedLine.id, updatedLine);
+                unsavedChanges = true;
+            }
+        } catch (error) {
+            console.error('updateLine 関数内でエラーが発生しました:', error);
         }
     }
 
-    // 新しいポリゴンを追加
     function addPolygon(polygon) {
-        polygons.push(polygon);
-    }
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('addPolygon() が呼び出されました。ポリゴンID:', polygon.id);
+            }
 
-    // ポリゴンを更新
-    function updatePolygon(updatedPolygon) {
-        const index = polygons.findIndex(polygon => polygon.id === updatedPolygon.id);
-        if (index !== -1) {
-            polygons[index] = updatedPolygon;
+            polygons.set(polygon.id, polygon);
+            unsavedChanges = true;
+        } catch (error) {
+            console.error('addPolygon 関数内でエラーが発生しました:', error);
         }
     }
 
-    // ポイントを削除
+    function updatePolygon(updatedPolygon) {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('updatePolygon() が呼び出されました。ポリゴンID:', updatedPolygon.id);
+            }
+
+            if (polygons.has(updatedPolygon.id)) {
+                polygons.set(updatedPolygon.id, updatedPolygon);
+                unsavedChanges = true;
+            }
+        } catch (error) {
+            console.error('updatePolygon 関数内でエラーが発生しました:', error);
+        }
+    }
+
     function removePoint(id) {
-        const index = points.findIndex(point => point.id === id);
-        if (index !== -1) points.splice(index, 1);
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('removePoint() が呼び出されました。ポイントID:', id);
+            }
+
+            points.delete(id);
+            unsavedChanges = true;
+        } catch (error) {
+            console.error('removePoint 関数内でエラーが発生しました:', error);
+        }
     }
 
-    // ラインを削除
     function removeLine(id) {
-        const index = lines.findIndex(line => line.id === id);
-        if (index !== -1) lines.splice(index, 1);
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('removeLine() が呼び出されました。ラインID:', id);
+            }
+
+            lines.delete(id);
+            unsavedChanges = true;
+        } catch (error) {
+            console.error('removeLine 関数内でエラーが発生しました:', error);
+        }
     }
 
-    // ポリゴンを削除
     function removePolygon(id) {
-        const index = polygons.findIndex(polygon => polygon.id === id);
-        if (index !== -1) polygons.splice(index, 1);
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('removePolygon() が呼び出されました。ポリゴンID:', id);
+            }
+
+            polygons.delete(id);
+            unsavedChanges = true;
+        } catch (error) {
+            console.error('removePolygon 関数内でエラーが発生しました:', error);
+        }
+    }
+
+    function clearData() {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info('clearData() が呼び出されました。');
+            }
+
+            points.clear();
+            lines.clear();
+            polygons.clear();
+        } catch (error) {
+            console.error('clearData 関数内でエラーが発生しました:', error);
+        }
+    }
+
+    // hasUnsavedChanges メソッドを追加
+    function hasUnsavedChanges() {
+        return unsavedChanges;
+    }
+
+    // データの保存や読み込み時に unsavedChanges をリセット
+    function resetUnsavedChanges() {
+        unsavedChanges = false;
+    }
+
+    // データの読み込み時に unsavedChanges をリセット
+    function loadData(data) {
+        try {
+            // データをクリア
+            points.clear();
+            lines.clear();
+            polygons.clear();
+
+            // データをセット
+            if (data.points) {
+                data.points.forEach(point => points.set(point.id, point));
+            }
+            if (data.lines) {
+                data.lines.forEach(line => lines.set(line.id, line));
+            }
+            if (data.polygons) {
+                data.polygons.forEach(polygon => polygons.set(polygon.id, polygon));
+            }
+
+            unsavedChanges = false; // データをロードしたので変更なしに設定
+        } catch (error) {
+            console.error('loadData 関数内でエラーが発生しました:', error);
+        }
+    }
+
+    // データの取得（保存用）
+    function getData() {
+        try {
+            return {
+                points: Array.from(points.values()),
+                lines: Array.from(lines.values()),
+                polygons: Array.from(polygons.values()),
+            };
+        } catch (error) {
+            console.error('getData 関数内でエラーが発生しました:', error);
+            return null;
+        }
     }
 
     return {
         getPoints,
         getLines,
         getPolygons,
+
+        getAllPoints,
+        getAllLines,
+        getAllPolygons,
 
         addPoint,
         addLine,
@@ -138,7 +409,13 @@ const DataStore = (() => {
         removePoint,
         removeLine,
         removePolygon,
+
+        clearData,
+        hasUnsavedChanges,
+        resetUnsavedChanges,
+        loadData,
+        getData,
     };
 })();
 
-module.exports = DataStore;
+export default DataStore;
