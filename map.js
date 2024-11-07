@@ -109,26 +109,69 @@ const MapModule = (() => {
                 console.info('renderData() が呼び出されました。');
             }
 
+            // 既存のデータと一時的な描画を削除
             zoomGroup.selectAll('.data-group').remove();
-            zoomGroup.selectAll('.temp-feature').remove();
+            zoomGroup.selectAll('.temp-feature-group').remove();
 
             const dataGroup = zoomGroup.append('g')
                 .attr('class', 'data-group');
 
             const currentYear = state.currentYear || 0;
-            const mapCopies = [-1, 0, 1];
+
+            // データの取得
+            const points = DataStore.getPoints(currentYear);
+            const lines = DataStore.getLines(currentYear);
+            const polygons = DataStore.getPolygons(currentYear);
+
+            const mapCopies = [-1, 0, 1, 2];
+
+            // 要素を複製する関数
+            function duplicateFeature(feature, offsetX) {
+                const duplicates = [];
+                const originalX = feature.x !== undefined ? feature.x : feature.points[0].x;
+                const positions = [originalX, originalX - mapWidth, originalX + mapWidth];
+
+                positions.forEach(posX => {
+                    if (posX + offsetX >= 0 && posX + offsetX <= mapWidth * mapCopies.length) {
+                        const duplicatedFeature = { ...feature };
+                        if (duplicatedFeature.x !== undefined) {
+                            duplicatedFeature.x = posX + offsetX;
+                        } else {
+                            duplicatedFeature.points = duplicatedFeature.points.map(p => ({ x: p.x + offsetX, y: p.y }));
+                        }
+                        duplicates.push(duplicatedFeature);
+                    }
+                });
+                return duplicates;
+            }
 
             mapCopies.forEach(offset => {
                 try {
                     const offsetX = offset * mapWidth;
 
+                    // フィーチャーの座標をオフセットし、必要に応じて複製
+                    let adjustedPoints = [];
+                    points.forEach(point => {
+                        adjustedPoints.push(...duplicateFeature(point, offsetX));
+                    });
+
+                    let adjustedLines = [];
+                    lines.forEach(line => {
+                        adjustedLines.push(...duplicateFeature(line, offsetX));
+                    });
+
+                    let adjustedPolygons = [];
+                    polygons.forEach(polygon => {
+                        adjustedPolygons.push(...duplicateFeature(polygon, offsetX));
+                    });
+
                     // ポイントの描画
                     drawFeatures(dataGroup, {
-                        data: DataStore.getPoints(currentYear),
+                        data: adjustedPoints,
                         className: `point-${offset}`,
                         elementType: 'circle',
                         attributes: {
-                            cx: d => d.x + offsetX,
+                            cx: d => d.x,
                             cy: d => d.y,
                             r: 5,
                             fill: 'red'
@@ -151,18 +194,14 @@ const MapModule = (() => {
 
                     // ラインの描画
                     drawFeatures(dataGroup, {
-                        data: DataStore.getLines(currentYear),
+                        data: adjustedLines,
                         className: `line-${offset}`,
                         elementType: 'path',
                         attributes: {
                             d: d => {
-                                const linePoints = d.points.map(p => ({
-                                    x: p.x + offsetX,
-                                    y: p.y
-                                }));
                                 return d3.line()
                                     .x(p => p.x)
-                                    .y(p => p.y)(linePoints);
+                                    .y(p => p.y)(d.points);
                             },
                             stroke: 'blue',
                             'stroke-width': 2,
@@ -186,19 +225,15 @@ const MapModule = (() => {
 
                     // ポリゴンの描画
                     drawFeatures(dataGroup, {
-                        data: DataStore.getPolygons(currentYear),
+                        data: adjustedPolygons,
                         className: `polygon-${offset}`,
                         elementType: 'path',
                         attributes: {
                             d: d => {
-                                const polygonPoints = d.points.map(p => ({
-                                    x: p.x + offsetX,
-                                    y: p.y
-                                }));
                                 return d3.line()
                                     .x(p => p.x)
                                     .y(p => p.y)
-                                    .curve(d3.curveLinearClosed)(polygonPoints);
+                                    .curve(d3.curveLinearClosed)(d.points);
                             },
                             stroke: 'green',
                             'stroke-width': 2,
@@ -224,6 +259,7 @@ const MapModule = (() => {
                 }
             });
 
+            // 一時的なフィーチャーの描画（必要に応じて修正）
             if (state.isDrawing || (state.currentTool === 'point' && state.tempPoint)) {
                 drawTemporaryFeatures();
             }
@@ -232,37 +268,50 @@ const MapModule = (() => {
         }
     }
 
+    // drawFeatures 関数の定義
     function drawFeatures(dataGroup, { data, className, elementType, attributes, eventHandlers }) {
         try {
             if (stateManager.getState().debugMode) {
                 console.info(`drawFeatures() が呼び出されました。クラス名: ${className}`);
             }
 
-            dataGroup.selectAll(`.${className}`)
-                .data(data, d => d.id)
-                .join(
-                    enter => {
-                        const elements = enter.append(elementType)
-                            .attr('class', className);
+            const selection = dataGroup.selectAll(`.${className}`)
+                .data(data, d => d.id); // キー関数を d.id に設定
 
-                        for (const [attrName, attrValue] of Object.entries(attributes)) {
-                            elements.attr(attrName, attrValue);
-                        }
+            // Enter セレクション
+            const enterSelection = selection.enter()
+                .append(elementType)
+                .attr('class', className);
 
-                        for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
-                            elements.on(eventName, eventHandler);
-                        }
+            // 属性とイベントハンドラを設定
+            enterSelection.each(function (d) {
+                const element = d3.select(this);
+                for (const [attrName, attrValue] of Object.entries(attributes)) {
+                    element.attr(attrName, typeof attrValue === 'function' ? attrValue(d) : attrValue);
+                }
+                for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
+                    element.on(eventName, eventHandler);
+                }
+            });
 
-                        return elements;
-                    },
-                    update => {
-                        for (const [attrName, attrValue] of Object.entries(attributes)) {
-                            update.attr(attrName, attrValue);
-                        }
-                        return update;
-                    },
-                    exit => exit.remove()
-                );
+            // Update セレクション
+            const updateSelection = selection
+                .transition()
+                .duration(200); // アニメーションの追加（必要に応じて）
+
+            updateSelection.each(function (d) {
+                const element = d3.select(this);
+                for (const [attrName, attrValue] of Object.entries(attributes)) {
+                    element.attr(attrName, typeof attrValue === 'function' ? attrValue(d) : attrValue);
+                }
+            });
+
+            // Exit セレクション
+            selection.exit()
+                .transition()
+                .duration(200)
+                .remove();
+
         } catch (error) {
             console.error(`drawFeatures 関数内でエラーが発生しました（クラス名: ${className}）:`, error);
         }
@@ -271,7 +320,13 @@ const MapModule = (() => {
     function drawTemporaryFeatures() {
         try {
             const state = stateManager.getState();
-            zoomGroup.selectAll('.temp-feature').remove();
+            let tempGroup = zoomGroup.select('.temp-feature-group');
+
+            if (tempGroup.empty()) {
+                tempGroup = zoomGroup.append('g').attr('class', 'temp-feature-group');
+            } else {
+                tempGroup.selectAll('*').remove();
+            }
 
             const mapCopies = [-1, 0, 1, 2];
 
@@ -280,12 +335,12 @@ const MapModule = (() => {
                     const offsetX = offset * mapWidth;
 
                     if (state.currentTool === 'point' && state.tempPoint) {
-                        drawTemporaryFeature(zoomGroup, {
-                            data: [state.tempPoint],
+                        drawTemporaryFeature(tempGroup, {
+                            data: [{ x: state.tempPoint.x + offsetX, y: state.tempPoint.y }],
                             className: `tempPoint-${offset}`,
                             elementType: 'circle',
                             attributes: {
-                                cx: d => d.x + offsetX,
+                                cx: d => d.x,
                                 cy: d => d.y,
                                 r: 5,
                                 fill: 'orange'
@@ -297,14 +352,14 @@ const MapModule = (() => {
                             y: p.y
                         }));
 
-                        drawTemporaryFeature(zoomGroup, {
+                        drawTemporaryFeature(tempGroup, {
                             data: [tempLinePointsWithOffset],
                             className: `tempLine-${offset}`,
                             elementType: 'path',
                             attributes: {
-                                d: d3.line()
-                                    .x(d => d.x)
-                                    .y(d => d.y)
+                                d: d => d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)(d)
                             },
                             style: {
                                 stroke: 'orange',
@@ -313,7 +368,7 @@ const MapModule = (() => {
                             }
                         });
 
-                        drawTemporaryFeature(zoomGroup, {
+                        drawTemporaryFeature(tempGroup, {
                             data: tempLinePointsWithOffset,
                             className: `tempPoint-${offset}`,
                             elementType: 'circle',
@@ -330,15 +385,15 @@ const MapModule = (() => {
                             y: p.y
                         }));
 
-                        drawTemporaryFeature(zoomGroup, {
+                        drawTemporaryFeature(tempGroup, {
                             data: [tempPolygonPointsWithOffset],
                             className: `tempPolygon-${offset}`,
                             elementType: 'path',
                             attributes: {
-                                d: d3.line()
-                                    .x(d => d.x)
-                                    .y(d => d.y)
-                                    .curve(d3.curveLinearClosed)
+                                d: d => d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)
+                                    .curve(d3.curveLinearClosed)(d)
                             },
                             style: {
                                 stroke: 'orange',
@@ -347,7 +402,7 @@ const MapModule = (() => {
                             }
                         });
 
-                        drawTemporaryFeature(zoomGroup, {
+                        drawTemporaryFeature(tempGroup, {
                             data: tempPolygonPointsWithOffset,
                             className: `tempPoint-${offset}`,
                             elementType: 'circle',
@@ -387,7 +442,7 @@ const MapModule = (() => {
                 elements.attr('d', d => attributes.d(d));
             } else {
                 for (const [attrName, attrValue] of Object.entries(attributes)) {
-                    elements.attr(attrName, attrValue);
+                    elements.attr(attrName, typeof attrValue === 'function' ? attrValue : attrValue);
                 }
             }
 

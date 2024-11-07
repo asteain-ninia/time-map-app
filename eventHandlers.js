@@ -278,36 +278,24 @@ const EventHandlers = (() => {
                 }
             });
 
+            // 読み込みボタンのクリックイベント内
             document.getElementById('loadButton').addEventListener('click', () => {
                 try {
-                    // 既存のデータがあるか確認
-                    if (
-                        DataStore.getAllPoints().length > 0 ||
-                        DataStore.getAllLines().length > 0 ||
-                        DataStore.getAllPolygons().length > 0
-                    ) {
+                    if (DataStore.hasUnsavedChanges()) {
                         ipc.invoke('show-confirm-dialog', {
-                            message: '既存のデータがあります。新しいデータを読み込む前に、既存のデータを消去しますか？',
-                        })
-                            .then((result) => {
-                                if (result) {
-                                    ipc.send('load-data');
-
-                                    if (state.debugMode) {
-                                        console.info('データの読み込みが開始されました。');
-                                    }
-                                }
-                            })
-                            .catch((error) => {
-                                console.error('確認ダイアログの表示中にエラーが発生しました:', error);
-                                UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
-                            });
+                            title: 'データの読み込み',
+                            message: '保存されていない変更があります。続行しますか？',
+                        }).then((result) => {
+                            if (result) {
+                                // データの読み込み処理
+                                ipc.send('load-data');
+                            }
+                        }).catch((error) => {
+                            console.error('確認ダイアログの表示中にエラーが発生しました:', error);
+                            UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                        });
                     } else {
                         ipc.send('load-data');
-
-                        if (state.debugMode) {
-                            console.info('データの読み込みが開始されました。');
-                        }
                     }
                 } catch (error) {
                     console.error('loadButton のクリックイベントでエラーが発生しました:', error);
@@ -319,17 +307,12 @@ const EventHandlers = (() => {
             ipc.on('load-data-reply', (data) => {
                 try {
                     if (data) {
-                        DataStore.clearData();
-                        (data.points || []).forEach((point) => DataStore.addPoint(point));
-                        (data.lines || []).forEach((line) => DataStore.addLine(line));
-                        (data.polygons || []).forEach((polygon) => DataStore.addPolygon(polygon));
+                        DataStore.loadData(data);
+                        DataStore.resetUnsavedChanges();
                         renderData();
-
-                        if (state.debugMode) {
-                            console.info('データの読み込みが完了しました。');
-                        }
+                        UI.showNotification('データが正常に読み込まれました。', 'info');
                     } else {
-                        UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                        UI.showNotification('データの読み込みがキャンセルされました。', 'info');
                     }
                 } catch (error) {
                     console.error('load-data-reply イベントでエラーが発生しました:', error);
@@ -340,7 +323,8 @@ const EventHandlers = (() => {
             ipc.on('save-data-reply', (success) => {
                 try {
                     if (success) {
-                        UI.showNotification('データを正常に保存しました。');
+                        DataStore.resetUnsavedChanges();
+                        UI.showNotification('データが正常に保存されました。', 'info');
 
                         if (state.debugMode) {
                             console.info('データの保存が完了しました。');

@@ -98,3 +98,19 @@ ipcMain.on('load-data', (event) => {
         event.reply('load-data-reply', null);
     }
 });
+
+ipcMain.handle('show-confirm-dialog', async (event, { title, message }) => {
+    try {
+        const result = await dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            buttons: ['はい', 'いいえ'],
+            defaultId: 1,
+            title: title,
+            message: message,
+        });
+        return result.response === 0; // 'はい' が押されたら true を返す
+    } catch (error) {
+        console.error('確認ダイアログの表示中にエラーが発生しました:', error);
+        return false;
+    }
+});

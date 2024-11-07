@@ -7,15 +7,23 @@ import EventHandlers from './eventHandlers.js';
 import stateManager from './stateManager.js';
 
 (() => {
+    let renderTimeout;
+    const RENDER_DELAY = 50; // デバウンス時間をミリ秒で設定
+
     function renderData() {
-        try {
-            MapModule.renderData();
-            UI.updateEventList(DataStore);
-            UI.updateUI();
-        } catch (error) {
-            console.error('データのレンダリング中にエラーが発生しました:', error);
-            UI.showNotification('データの表示中にエラーが発生しました。', 'error');
+        if (renderTimeout) {
+            clearTimeout(renderTimeout);
         }
+        renderTimeout = setTimeout(() => {
+            try {
+                MapModule.renderData();
+                UI.updateEventList(DataStore);
+                UI.updateUI();
+            } catch (error) {
+                console.error('データのレンダリング中にエラーが発生しました:', error);
+                UI.showNotification('データの表示中にエラーが発生しました。', 'error');
+            }
+        }, RENDER_DELAY);
     }
 
     function init() {

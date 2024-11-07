@@ -191,6 +191,11 @@ const UI = (() => {
                     const yearInputValue = document.getElementById('pointYear').value;
                     const year = yearInputValue !== '' ? parseInt(yearInputValue, 10) : undefined;
 
+                    if (year === undefined || isNaN(year)) {
+                        showNotification('年を正しく入力してください。', 'error');
+                        return;
+                    }
+
                     if (!point) {
                         const newPoint = {
                             id: Date.now(),
@@ -206,7 +211,7 @@ const UI = (() => {
                         };
                         DataStore.addPoint(newPoint);
                     } else {
-                        if (!point.properties) {
+                        if (!point.properties || !Array.isArray(point.properties)) {
                             point.properties = [];
                         }
 
