@@ -189,3 +189,77 @@ button.active {
     pointer-events: none;
     /* クリックイベントを無効にします */
 }
+
+/* モーダルダイアログのスタイル */
+.modal {
+    position: fixed;
+    z-index: 300;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    /* 透過背景 */
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 10% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 400px;
+    position: relative;
+}
+
+.close-button {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+}
+
+#sliderSettings,
+#worldSettings {
+    margin-bottom: 20px;
+}
+
+#sliderSettings label,
+#worldSettings label {
+    display: block;
+    margin-top: 10px;
+}
+
+#sliderSettings input,
+#worldSettings input,
+#worldSettings textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#worldInfo {
+    position: absolute;
+    top: 40px;
+    left: 10px;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    z-index: 100;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+#worldInfo h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+#worldInfo p {
+    margin: 5px 0 0 0;
+}

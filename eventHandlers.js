@@ -262,11 +262,8 @@ const EventHandlers = (() => {
             // 保存・読み込みボタンのイベントリスナーや、IPC通信の設定
             document.getElementById('saveButton').addEventListener('click', () => {
                 try {
-                    const dataToSave = {
-                        points: DataStore.getAllPoints(),
-                        lines: DataStore.getAllLines(),
-                        polygons: DataStore.getAllPolygons(),
-                    };
+                    const dataToSave = DataStore.getData(); // 修正点
+
                     ipc.send('save-data', dataToSave);
 
                     if (state.debugMode) {
@@ -304,12 +301,27 @@ const EventHandlers = (() => {
             });
 
             // メインプロセスからのデータ受信
+            // 読み込み時にUIを更新
             ipc.on('load-data-reply', (data) => {
                 try {
                     if (data) {
                         DataStore.loadData(data);
                         DataStore.resetUnsavedChanges();
+
+                        // メタデータの状態を更新
+                        stateManager.setState({
+                            sliderMin: data.metadata && data.metadata.sliderMin !== undefined ? data.metadata.sliderMin : 0,
+                            sliderMax: data.metadata && data.metadata.sliderMax !== undefined ? data.metadata.sliderMax : 10000,
+                            worldName: data.metadata && data.metadata.worldName ? data.metadata.worldName : '',
+                            worldDescription: data.metadata && data.metadata.worldDescription ? data.metadata.worldDescription : '',
+                            currentYear: data.metadata && data.metadata.sliderMin !== undefined ? data.metadata.sliderMin : 0,
+                        });
+
+                        UI.updateSlider();    // スライダーのUIを更新
+                        UI.updateWorldInfo(); // 世界情報のUIを更新
+                        UI.updateUI();
                         renderData();
+
                         UI.showNotification('データが正常に読み込まれました。', 'info');
                     } else {
                         UI.showNotification('データの読み込みがキャンセルされました。', 'info');
@@ -335,6 +347,92 @@ const EventHandlers = (() => {
                 } catch (error) {
                     console.error('save-data-reply イベントでエラーが発生しました:', error);
                     UI.showNotification('データの保存中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // スライダーの最小・最大値の更新ボタンのイベントリスナー
+            document.getElementById('updateSliderButton').addEventListener('click', () => {
+                try {
+                    const min = parseInt(document.getElementById('sliderMin').value, 10);
+                    const max = parseInt(document.getElementById('sliderMax').value, 10);
+
+                    if (isNaN(min) || isNaN(max) || min >= max) {
+                        UI.showNotification('最小値と最大値を正しく入力してください。', 'error');
+                        return;
+                    }
+
+                    stateManager.setState({
+                        sliderMin: min,
+                        sliderMax: max,
+                        currentYear: Math.max(state.currentYear, min),
+                    });
+
+                    UI.updateSlider(); // 追加
+                    renderData();
+
+                    if (state.debugMode) {
+                        console.info('スライダーの最小・最大値が更新されました。');
+                    }
+                } catch (error) {
+                    console.error('updateSliderButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('スライダーの更新中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // 世界の名前と概要の保存ボタンのイベントリスナー
+            document.getElementById('saveWorldSettingsButton').addEventListener('click', () => {
+                try {
+                    const name = document.getElementById('worldName').value;
+                    const description = document.getElementById('worldDescription').value;
+
+                    stateManager.setState({
+                        worldName: name,
+                        worldDescription: description,
+                    });
+
+                    UI.updateWorldInfo(); // 追加
+
+                    if (state.debugMode) {
+                        console.info('世界の名前と概要が更新されました。');
+                    }
+                } catch (error) {
+                    console.error('saveWorldSettingsButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('世界情報の保存中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // 設定ボタンのイベントリスナー（追加）
+            document.getElementById('settingsButton').addEventListener('click', () => {
+                try {
+                    const settingsModal = document.getElementById('settingsModal');
+                    settingsModal.style.display = 'block';
+                    UI.populateSettings(); // 設定ウィンドウのフィールドを現在の状態で更新
+                } catch (error) {
+                    console.error('settingsButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('設定ウィンドウの表示中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // 設定ウィンドウの閉じるボタンのイベントリスナー（追加）
+            document.getElementById('closeSettingsButton').addEventListener('click', () => {
+                try {
+                    const settingsModal = document.getElementById('settingsModal');
+                    settingsModal.style.display = 'none';
+                } catch (error) {
+                    console.error('closeSettingsButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('設定ウィンドウの閉鎖中にエラーが発生しました。', 'error');
+                }
+            });
+
+            // モーダル外クリックで閉じる（追加）
+            window.addEventListener('click', (event) => {
+                try {
+                    const settingsModal = document.getElementById('settingsModal');
+                    if (event.target === settingsModal) {
+                        settingsModal.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('モーダル外クリックイベントでエラーが発生しました:', error);
                 }
             });
 

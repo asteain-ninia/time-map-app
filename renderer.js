@@ -29,6 +29,8 @@ import stateManager from './stateManager.js';
     function init() {
         try {
             UI.updateUI();
+            UI.populateSettings(); // 設定ウィンドウのフィールドを初期化
+
             MapModule.loadMap(DataStore, UI, renderData)
                 .then(() => {
                     const ipc = window.electronAPI;

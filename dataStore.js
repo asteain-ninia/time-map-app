@@ -378,10 +378,17 @@ const DataStore = (() => {
     // データの取得（保存用）
     function getData() {
         try {
+            const state = stateManager.getState();
             return {
                 points: Array.from(points.values()),
                 lines: Array.from(lines.values()),
                 polygons: Array.from(polygons.values()),
+                metadata: { // メタデータを含める
+                    sliderMin: state.sliderMin,
+                    sliderMax: state.sliderMax,
+                    worldName: state.worldName,
+                    worldDescription: state.worldDescription,
+                },
             };
         } catch (error) {
             console.error('getData 関数内でエラーが発生しました:', error);

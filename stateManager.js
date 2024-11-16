@@ -8,7 +8,11 @@ const state = {
     tempLinePoints: [],
     tempPolygonPoints: [],
     currentYear: 0,
-    debugMode: true, // デバッグモードを追加
+    debugMode: true,
+    sliderMin: 0,            // 追加: スライダーの最小値
+    sliderMax: 10000,        // 追加: スライダーの最大値
+    worldName: '',           // 追加: 世界の名前
+    worldDescription: '',    // 追加: 世界の概要
 };
 
 const listeners = [];

@@ -14,6 +14,8 @@
   <div id="toolbar">
     <div class="left-buttons">
       <button id="editModeButton">編集モード: OFF</button>
+      <!-- 追加: 設定ボタン -->
+      <button id="settingsButton">設定</button>
     </div>
     <div class="center-buttons">
       <div id="tools" style="display: none;">
@@ -53,6 +55,35 @@
     </div>
   </div>
 
+  <!-- 設定ウィンドウ（モーダルダイアログ） -->
+  <div id="settingsModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <span id="closeSettingsButton" class="close-button">&times;</span>
+      <h2>設定</h2>
+      <!-- スライダー設定フィールド -->
+      <div id="sliderSettings">
+        <label for="sliderMin">最小年:</label>
+        <input type="number" id="sliderMin" value="0"><br>
+        <label for="sliderMax">最大年:</label>
+        <input type="number" id="sliderMax" value="10000"><br>
+        <button id="updateSliderButton">スライダー更新</button>
+      </div>
+      <!-- 世界の設定フィールド -->
+      <div id="worldSettings">
+        <label for="worldName">世界の名前:</label>
+        <input type="text" id="worldName" value=""><br>
+        <label for="worldDescription">概要:</label>
+        <textarea id="worldDescription"></textarea><br>
+        <button id="saveWorldSettingsButton">世界情報を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 世界情報表示エリア -->
+  <div id="worldInfo">
+    <h1 id="worldNameDisplay">無名の世界</h1>
+    <p id="worldDescriptionDisplay">説明がありません。</p>
+  </div>
 
   <!-- 編集フォームなど -->
   <!-- ポイント編集フォーム -->

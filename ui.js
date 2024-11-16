@@ -40,6 +40,9 @@ const UI = (() => {
             if (!state.isEditMode) {
                 hideAllForms();
             }
+
+            updateSlider();
+            updateWorldInfo();
         } catch (error) {
             console.error('updateUI 関数内でエラーが発生しました:', error);
             showNotification('UIの更新中にエラーが発生しました。', 'error');
@@ -534,6 +537,48 @@ const UI = (() => {
         }
     }
 
+    // スライダーの最小・最大値を更新する関数
+    function updateSlider() {
+        try {
+            const state = stateManager.getState();
+            const timeSlider = document.getElementById('timeSlider');
+
+            timeSlider.min = state.sliderMin;
+            timeSlider.max = state.sliderMax;
+            timeSlider.value = state.currentYear;
+
+            document.getElementById('currentYear').textContent = `年: ${state.currentYear}`;
+        } catch (error) {
+            console.error('updateSlider 関数内でエラーが発生しました:', error);
+        }
+    }
+
+    // 世界の名前と概要を更新する関数
+    function updateWorldInfo() {
+        try {
+            const state = stateManager.getState();
+
+            document.getElementById('worldNameDisplay').textContent = state.worldName || '無名の世界';
+            document.getElementById('worldDescriptionDisplay').textContent = state.worldDescription || '説明がありません。';
+        } catch (error) {
+            console.error('updateWorldInfo 関数内でエラーが発生しました:', error);
+        }
+    }
+
+    // 設定ウィンドウのフィールドを現在の状態で更新する関数
+    function populateSettings() {
+        try {
+            const state = stateManager.getState();
+
+            document.getElementById('sliderMin').value = state.sliderMin;
+            document.getElementById('sliderMax').value = state.sliderMax;
+            document.getElementById('worldName').value = state.worldName;
+            document.getElementById('worldDescription').value = state.worldDescription;
+        } catch (error) {
+            console.error('populateSettings 関数内でエラーが発生しました:', error);
+        }
+    }
+
     return {
         updateUI,
         showTooltip,
@@ -546,6 +591,9 @@ const UI = (() => {
         showNotification,
         hideAllForms,
         updateEventList,
+        updateSlider,
+        updateWorldInfo,
+        populateSettings
     };
 })();
 
