@@ -302,8 +302,131 @@ const MapModule = (() => {
         }
     }
 
-    // その他の関数（drawTemporaryFeatures, drawTemporaryFeature）はそのまま
-
+    function drawTemporaryFeatures() {
+        try {
+            const state = stateManager.getState();
+            let tempGroup = zoomGroup.select('.temp-feature-group');
+            if (tempGroup.empty()) {
+                tempGroup = zoomGroup.append('g').attr('class', 'temp-feature-group');
+            } else {
+                tempGroup.selectAll('*').remove();
+            }
+            const mapCopies = [-1, 0, 1, 2];
+            mapCopies.forEach(offset => {
+                try {
+                    const offsetX = offset * mapWidth;
+                    if (state.currentTool === 'point' && state.tempPoint) {
+                        drawTemporaryFeature(tempGroup, {
+                            data: [{ x: state.tempPoint.x + offsetX, y: state.tempPoint.y }],
+                            className: `tempPoint-${offset}`,
+                            elementType: 'circle',
+                            attributes: {
+                                cx: d => d.x,
+                                cy: d => d.y,
+                                r: 5,
+                                fill: 'orange'
+                            }
+                        });
+                    } else if (state.currentTool === 'line' && state.tempLinePoints.length > 0) {
+                        const tempLinePointsWithOffset = state.tempLinePoints.map(p => ({
+                            x: p.x + offsetX,
+                            y: p.y
+                        }));
+                        drawTemporaryFeature(tempGroup, {
+                            data: [tempLinePointsWithOffset],
+                            className: `tempLine-${offset}`,
+                            elementType: 'path',
+                            attributes: {
+                                d: d => d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)(d)
+                            },
+                            style: {
+                                stroke: 'orange',
+                                'stroke-width': 2,
+                                fill: 'none'
+                            }
+                        });
+                        drawTemporaryFeature(tempGroup, {
+                            data: tempLinePointsWithOffset,
+                            className: `tempPoint-${offset}`,
+                            elementType: 'circle',
+                            attributes: {
+                                cx: d => d.x,
+                                cy: d => d.y,
+                                r: 5,
+                                fill: 'orange'
+                            }
+                        });
+                    } else if (state.currentTool === 'polygon' && state.tempPolygonPoints.length > 0) {
+                        const tempPolygonPointsWithOffset = state.tempPolygonPoints.map(p => ({
+                            x: p.x + offsetX,
+                            y: p.y
+                        }));
+                        drawTemporaryFeature(tempGroup, {
+                            data: [tempPolygonPointsWithOffset],
+                            className: `tempPolygon-${offset}`,
+                            elementType: 'path',
+                            attributes: {
+                                d: d => d3.line()
+                                    .x(p => p.x)
+                                    .y(p => p.y)
+                                    .curve(d3.curveLinearClosed)(d)
+                            },
+                            style: {
+                                stroke: 'orange',
+                                'stroke-width': 2,
+                                fill: 'rgba(255, 165, 0, 0.3)'
+                            }
+                        });
+                        drawTemporaryFeature(tempGroup, {
+                            data: tempPolygonPointsWithOffset,
+                            className: `tempPoint-${offset}`,
+                            elementType: 'circle',
+                            attributes: {
+                                cx: d => d.x,
+                                cy: d => d.y,
+                                r: 5,
+                                fill: 'orange'
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error(`drawTemporaryFeatures のループ内でエラーが発生しました（オフセット: ${offset}）:`, error);
+                }
+            });
+        } catch (error) {
+            console.error('drawTemporaryFeatures 関数内でエラーが発生しました:', error);
+        }
+    }
+    function drawTemporaryFeature(group, { data, className, elementType, attributes, style }) {
+        try {
+            if (stateManager.getState().debugMode) {
+                console.info(`drawTemporaryFeature() が呼び出されました。クラス名: ${className}`);
+            }
+            const tempGroup = group.append('g')
+                .attr('class', 'temp-feature');
+            const elements = tempGroup.selectAll(`.${className}`)
+                .data(data)
+                .enter()
+                .append(elementType)
+                .attr('class', className);
+            if (elementType === 'path') {
+                elements.attr('d', d => attributes.d(d));
+            } else {
+                for (const [attrName, attrValue] of Object.entries(attributes)) {
+                    elements.attr(attrName, typeof attrValue === 'function' ? attrValue : attrValue);
+                }
+            }
+            if (style) {
+                for (const [styleName, styleValue] of Object.entries(style)) {
+                    elements.style(styleName, styleValue);
+                }
+            }
+        } catch (error) {
+            console.error(`drawTemporaryFeature 関数内でエラーが発生しました（クラス名: ${className}）:`, error);
+        }
+    }
     return {
         loadMap,
         renderData,
