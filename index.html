@@ -13,16 +13,23 @@
   <!-- ツールバー -->
   <div id="toolbar">
     <div class="left-buttons">
+      <button id="addModeButton">追加モード: OFF</button>
       <button id="editModeButton">編集モード: OFF</button>
-      <!-- 追加: 設定ボタン -->
       <button id="settingsButton">設定</button>
     </div>
     <div class="center-buttons">
       <div id="tools" style="display: none;">
         <button id="selectTool">選択</button>
-        <button id="pointTool">ポイント</button>
-        <button id="lineTool">ライン</button>
-        <button id="polygonTool">ポリゴン</button>
+        <button id="pointTool">ポイント追加</button>
+        <button id="lineTool">ライン追加</button>
+        <button id="polygonTool">ポリゴン追加</button>
+        <!-- 新しい編集ツールを追加 -->
+        <button id="pointMoveTool">ポイント移動</button>
+        <button id="pointAttributeEditTool">ポイント属性編集</button>
+        <button id="lineAttributeEditTool">ライン属性編集</button>
+        <button id="lineVertexEditTool">ライン頂点編集</button>
+        <button id="polygonAttributeEditTool">ポリゴン属性編集</button>
+        <button id="polygonVertexEditTool">ポリゴン頂点編集</button>
       </div>
       <div id="drawControls" style="display: none;">
         <button id="confirmDrawButton">確定</button>
@@ -112,7 +119,7 @@
     <button id="deleteLineButton">削除</button>
   </div>
 
-  <!-- 面編集フォーム -->
+  <!-- ポリゴン編集フォーム -->
   <div id="polygonEditForm" style="display: none;">
     <label for="polygonName">名前:</label>
     <input type="text" id="polygonName"><br>
@@ -136,8 +143,7 @@
   <div id="tooltip" style="display: none;"></div>
 
   <!-- スクリプトの読み込み -->
-  <script src=" https://d3js.org/d3.v7.min.js">
-  </script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="renderer.js" type="module"></script>
 </body>
 

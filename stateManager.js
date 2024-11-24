@@ -1,7 +1,8 @@
 // stateManager.js
 
 const state = {
-    isEditMode: false,
+    isAddMode: false,           // 追加: 追加モードかどうか
+    isEditMode: false,          // 追加: 編集モードかどうか
     currentTool: 'select',
     isDrawing: false,
     tempPoint: null,
@@ -13,6 +14,8 @@ const state = {
     sliderMax: 10000,        // 追加: スライダーの最大値
     worldName: '',           // 追加: 世界の名前
     worldDescription: '',    // 追加: 世界の概要
+    selectedFeature: null,      // 追加: 現在選択されているフィーチャー
+    isDragging: false,          // 追加: ドラッグ中かどうか
 };
 
 const listeners = [];
@@ -22,6 +25,10 @@ function getState() {
 }
 
 function setState(updates) {
+    // selectedFeature のリセット
+    if (updates.currentTool && updates.currentTool !== state.currentTool) {
+        updates.selectedFeature = null;
+    }
     Object.assign(state, updates);
     // 状態が変更されたら、すべてのリスナーに通知
     listeners.forEach(listener => listener(getState()));

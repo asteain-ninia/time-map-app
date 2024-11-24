@@ -105,7 +105,15 @@ button.active {
     align-items: center;
 }
 
-#tools button,
+#tools button {
+    display: inline-block;
+}
+
+/* 非表示のボタン */
+#tools button[style*="display: none"] {
+    display: none !important;
+}
+
 #drawControls button {
     margin-right: 5px;
 }
@@ -262,4 +270,9 @@ button.active {
 
 #worldInfo p {
     margin: 5px 0 0 0;
+}
+
+.selected {
+    stroke: orange;
+    stroke-width: 4;
 }

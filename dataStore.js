@@ -21,11 +21,9 @@ const DataStore = (() => {
 
                     let properties = null;
 
-                    // 'properties' フィールドが存在し、配列の場合
                     if (point.properties && Array.isArray(point.properties)) {
                         properties = getPropertiesForYear(point.properties, year);
                     } else {
-                        // 'properties' がない場合でも、ポイントに直接 'year', 'name', 'description' があるか確認
                         if (point.year !== undefined) {
                             properties = {
                                 year: point.year,
@@ -33,7 +31,6 @@ const DataStore = (() => {
                                 description: point.description,
                             };
                         } else {
-                            // 'year' がない場合はデフォルト値を設定
                             properties = {
                                 year: 0,
                                 name: point.name || '不明なポイント',
@@ -49,6 +46,8 @@ const DataStore = (() => {
                             id: point.id,
                             x: point.x,
                             y: point.y,
+                            properties: point.properties,
+                            originalPoint: point,
                             ...properties,
                         };
                     } else {
@@ -98,6 +97,8 @@ const DataStore = (() => {
                         return {
                             id: line.id,
                             points: line.points,
+                            properties: line.properties,
+                            originalLine: line,
                             ...properties,
                         };
                     } else {
@@ -147,6 +148,8 @@ const DataStore = (() => {
                         return {
                             id: polygon.id,
                             points: polygon.points,
+                            properties: polygon.properties,
+                            originalPolygon: polygon,
                             ...properties,
                         };
                     } else {
@@ -225,6 +228,8 @@ const DataStore = (() => {
             if (points.has(updatedPoint.id)) {
                 points.set(updatedPoint.id, updatedPoint);
                 unsavedChanges = true;
+            } else {
+                console.warn('ポイントが見つかりませんでした。ID:', updatedPoint.id);
             }
         } catch (error) {
             console.error('updatePoint 関数内でエラーが発生しました:', error);
@@ -253,6 +258,8 @@ const DataStore = (() => {
             if (lines.has(updatedLine.id)) {
                 lines.set(updatedLine.id, updatedLine);
                 unsavedChanges = true;
+            } else {
+                console.warn('ラインが見つかりませんでした。ID:', updatedLine.id);
             }
         } catch (error) {
             console.error('updateLine 関数内でエラーが発生しました:', error);
@@ -281,6 +288,8 @@ const DataStore = (() => {
             if (polygons.has(updatedPolygon.id)) {
                 polygons.set(updatedPolygon.id, updatedPolygon);
                 unsavedChanges = true;
+            } else {
+                console.warn('ポリゴンが見つかりませんでした。ID:', updatedPolygon.id);
             }
         } catch (error) {
             console.error('updatePolygon 関数内でエラーが発生しました:', error);
@@ -340,25 +349,20 @@ const DataStore = (() => {
         }
     }
 
-    // hasUnsavedChanges メソッドを追加
     function hasUnsavedChanges() {
         return unsavedChanges;
     }
 
-    // データの保存や読み込み時に unsavedChanges をリセット
     function resetUnsavedChanges() {
         unsavedChanges = false;
     }
 
-    // データの読み込み時に unsavedChanges をリセット
     function loadData(data) {
         try {
-            // データをクリア
             points.clear();
             lines.clear();
             polygons.clear();
 
-            // データをセット
             if (data.points) {
                 data.points.forEach(point => points.set(point.id, point));
             }
@@ -369,13 +373,12 @@ const DataStore = (() => {
                 data.polygons.forEach(polygon => polygons.set(polygon.id, polygon));
             }
 
-            unsavedChanges = false; // データをロードしたので変更なしに設定
+            unsavedChanges = false;
         } catch (error) {
             console.error('loadData 関数内でエラーが発生しました:', error);
         }
     }
 
-    // データの取得（保存用）
     function getData() {
         try {
             const state = stateManager.getState();
@@ -383,7 +386,7 @@ const DataStore = (() => {
                 points: Array.from(points.values()),
                 lines: Array.from(lines.values()),
                 polygons: Array.from(polygons.values()),
-                metadata: { // メタデータを含める
+                metadata: {
                     sliderMin: state.sliderMin,
                     sliderMax: state.sliderMax,
                     worldName: state.worldName,

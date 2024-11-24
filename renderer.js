@@ -8,7 +8,7 @@ import stateManager from './stateManager.js';
 
 (() => {
     let renderTimeout;
-    const RENDER_DELAY = 50; // デバウンス時間をミリ秒で設定
+    const RENDER_DELAY = 50;
 
     function renderData() {
         if (renderTimeout) {
@@ -29,7 +29,7 @@ import stateManager from './stateManager.js';
     function init() {
         try {
             UI.updateUI();
-            UI.populateSettings(); // 設定ウィンドウのフィールドを初期化
+            UI.populateSettings();
 
             MapModule.loadMap(DataStore, UI, renderData)
                 .then(() => {

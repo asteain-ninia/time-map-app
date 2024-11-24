@@ -14,20 +14,48 @@ const UI = (() => {
                 console.info('updateUI() が呼び出されました。');
             }
 
+            document.getElementById('addModeButton').textContent =
+                `追加モード: ${state.isAddMode ? 'ON' : 'OFF'}`;
+
             document.getElementById('editModeButton').textContent =
                 `編集モード: ${state.isEditMode ? 'ON' : 'OFF'}`;
 
+            document.getElementById('addModeButton').classList.toggle('active', state.isAddMode);
             document.getElementById('editModeButton').classList.toggle('active', state.isEditMode);
-            document.getElementById('tools').style.display = state.isEditMode ? 'block' : 'none';
 
-            const buttons = document.querySelectorAll('#tools button');
-            buttons.forEach(button => {
-                button.classList.toggle('active', button.id === `${state.currentTool}Tool`);
+            document.getElementById('tools').style.display = (state.isAddMode || state.isEditMode) ? 'block' : 'none';
+
+            const toolButtons = document.querySelectorAll('#tools button');
+            toolButtons.forEach(button => {
+                const toolName = button.id.replace('Tool', '');
+                button.classList.toggle('active', toolName === state.currentTool);
+
+                if (state.isAddMode) {
+                    if (['point', 'line', 'polygon'].includes(toolName)) {
+                        button.style.display = 'inline-block';
+                    } else {
+                        button.style.display = 'none';
+                    }
+                } else if (state.isEditMode) {
+                    if ([
+                        'pointMove',
+                        'pointAttributeEdit',
+                        'lineAttributeEdit',
+                        'lineVertexEdit',
+                        'polygonAttributeEdit',
+                        'polygonVertexEdit',
+                    ].includes(toolName)) {
+                        button.style.display = 'inline-block';
+                    } else {
+                        button.style.display = 'none';
+                    }
+                } else {
+                    button.style.display = 'none';
+                }
             });
 
-            // 確定ボタンの表示/非表示
             let showConfirmButton = false;
-            if (state.isEditMode && state.isDrawing) {
+            if (state.isAddMode && state.isDrawing) {
                 if (state.currentTool === 'line' && state.tempLinePoints.length >= 2) {
                     showConfirmButton = true;
                 } else if (state.currentTool === 'polygon' && state.tempPolygonPoints.length >= 3) {
@@ -37,7 +65,7 @@ const UI = (() => {
 
             document.getElementById('drawControls').style.display = showConfirmButton ? 'block' : 'none';
 
-            if (!state.isEditMode) {
+            if (!state.isAddMode && !state.isEditMode) {
                 hideAllForms();
             }
 
@@ -180,7 +208,11 @@ const UI = (() => {
                 document.getElementById('pointDescription').value = '';
                 document.getElementById('pointYear').value = currentYear;
             } else {
-                const properties = getPropertiesForYear(point.properties, currentYear);
+                const properties = getPropertiesForYear(point.properties, currentYear) || {
+                    name: point.name || '',
+                    description: point.description || '',
+                    year: point.year !== undefined ? point.year : currentYear
+                };
 
                 document.getElementById('pointName').value = properties.name || '';
                 document.getElementById('pointDescription').value = properties.description || '';
@@ -289,7 +321,11 @@ const UI = (() => {
                 document.getElementById('lineDescription').value = line.description || '';
                 document.getElementById('lineYear').value = currentYear;
             } else {
-                const properties = getPropertiesForYear(line.properties, currentYear);
+                const properties = getPropertiesForYear(line.properties, currentYear) || {
+                    name: line.name || '',
+                    description: line.description || '',
+                    year: line.year !== undefined ? line.year : currentYear
+                };
                 document.getElementById('lineName').value = properties.name || '';
                 document.getElementById('lineDescription').value = properties.description || '';
                 document.getElementById('lineYear').value = properties.year !== undefined ? properties.year : '';
@@ -302,6 +338,11 @@ const UI = (() => {
                     const name = document.getElementById('lineName').value;
                     const description = document.getElementById('lineDescription').value;
                     const year = parseInt(document.getElementById('lineYear').value, 10);
+
+                    if (isNaN(year)) {
+                        showNotification('年を正しく入力してください。', 'error');
+                        return;
+                    }
 
                     if (!line.properties) {
                         line.properties = [];
@@ -380,7 +421,11 @@ const UI = (() => {
                 document.getElementById('polygonDescription').value = polygon.description || '';
                 document.getElementById('polygonYear').value = currentYear;
             } else {
-                const properties = getPropertiesForYear(polygon.properties, currentYear);
+                const properties = getPropertiesForYear(polygon.properties, currentYear) || {
+                    name: polygon.name || '',
+                    description: polygon.description || '',
+                    year: polygon.year !== undefined ? polygon.year : currentYear
+                };
                 document.getElementById('polygonName').value = properties.name || '';
                 document.getElementById('polygonDescription').value = properties.description || '';
                 document.getElementById('polygonYear').value = properties.year !== undefined ? properties.year : '';
@@ -393,6 +438,11 @@ const UI = (() => {
                     const name = document.getElementById('polygonName').value;
                     const description = document.getElementById('polygonDescription').value;
                     const year = parseInt(document.getElementById('polygonYear').value, 10);
+
+                    if (isNaN(year)) {
+                        showNotification('年を正しく入力してください。', 'error');
+                        return;
+                    }
 
                     if (!polygon.properties) {
                         polygon.properties = [];
@@ -537,7 +587,6 @@ const UI = (() => {
         }
     }
 
-    // スライダーの最小・最大値を更新する関数
     function updateSlider() {
         try {
             const state = stateManager.getState();
@@ -553,7 +602,6 @@ const UI = (() => {
         }
     }
 
-    // 世界の名前と概要を更新する関数
     function updateWorldInfo() {
         try {
             const state = stateManager.getState();
@@ -565,7 +613,6 @@ const UI = (() => {
         }
     }
 
-    // 設定ウィンドウのフィールドを現在の状態で更新する関数
     function populateSettings() {
         try {
             const state = stateManager.getState();

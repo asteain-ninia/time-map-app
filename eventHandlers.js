@@ -5,25 +5,51 @@ import stateManager from './stateManager.js';
 const EventHandlers = (() => {
     function setupEventListeners(DataStore, MapModule, UI, ipc, renderData) {
         try {
-            // 状態の取得
             let state = stateManager.getState();
 
-            // 状態の変更時に再度状態を取得
             stateManager.subscribe(newState => {
                 state = newState;
             });
 
-            // 編集モードボタンのイベントリスナー
+            document.getElementById('addModeButton').addEventListener('click', () => {
+                try {
+                    const isAddMode = !state.isAddMode;
+                    stateManager.setState({
+                        isAddMode,
+                        isEditMode: false,
+                        currentTool: isAddMode ? 'select' : 'select',
+                        isDrawing: false,
+                        tempPoint: null,
+                        tempLinePoints: [],
+                        tempPolygonPoints: [],
+                        selectedFeature: null,
+                        isDragging: false,
+                    });
+                    UI.updateUI();
+                    renderData();
+
+                    if (state.debugMode) {
+                        console.info('追加モードが切り替えられました:', isAddMode);
+                    }
+                } catch (error) {
+                    console.error('addModeButton のクリックイベントでエラーが発生しました:', error);
+                    UI.showNotification('追加モードの切り替え中にエラーが発生しました。', 'error');
+                }
+            });
+
             document.getElementById('editModeButton').addEventListener('click', () => {
                 try {
                     const isEditMode = !state.isEditMode;
                     stateManager.setState({
                         isEditMode,
-                        currentTool: isEditMode ? state.currentTool : 'select',
+                        isAddMode: false,
+                        currentTool: isEditMode ? 'select' : 'select',
                         isDrawing: false,
                         tempPoint: null,
                         tempLinePoints: [],
                         tempPolygonPoints: [],
+                        selectedFeature: null,
+                        isDragging: false,
                     });
                     UI.updateUI();
                     renderData();
@@ -37,8 +63,18 @@ const EventHandlers = (() => {
                 }
             });
 
-            // ツールボタンのイベントリスナー
-            ['selectTool', 'pointTool', 'lineTool', 'polygonTool'].forEach(toolId => {
+            [
+                'selectTool',
+                'pointTool',
+                'lineTool',
+                'polygonTool',
+                'pointMoveTool',
+                'pointAttributeEditTool',
+                'lineAttributeEditTool',
+                'lineVertexEditTool',
+                'polygonAttributeEditTool',
+                'polygonVertexEditTool',
+            ].forEach(toolId => {
                 document.getElementById(toolId).addEventListener('click', () => {
                     try {
                         const toolName = toolId.replace('Tool', '');
@@ -48,6 +84,8 @@ const EventHandlers = (() => {
                             tempPoint: null,
                             tempLinePoints: [],
                             tempPolygonPoints: [],
+                            selectedFeature: null,
+                            isDragging: false,
                         });
                         UI.updateUI();
                         renderData();
@@ -62,13 +100,12 @@ const EventHandlers = (() => {
                 });
             });
 
-            // 地図上のクリックイベントを設定
             const svg = d3.select('#map svg');
             if (!svg.empty()) {
                 svg.on('click', (event) => {
                     try {
                         const currentState = stateManager.getState();
-                        if (currentState.isEditMode) {
+                        if (currentState.isAddMode) {
                             const [x, y] = d3.pointer(event);
                             const transform = d3.zoomTransform(svg.node());
                             const scaledX = (x - transform.x) / transform.k;
@@ -88,7 +125,7 @@ const EventHandlers = (() => {
                                         y: scaledY,
                                     },
                                 });
-                                renderData(); // 一時的なポイントを表示
+                                renderData();
                                 UI.showEditForm(null, DataStore, renderData);
                             } else if (currentState.currentTool === 'line') {
                                 if (!currentState.isDrawing) {
@@ -123,72 +160,13 @@ const EventHandlers = (() => {
                         UI.showNotification('地図上での操作中にエラーが発生しました。', 'error');
                     }
                 });
-
-                // ダブルクリックで線や面の描画を完了
-                svg.on('dblclick.zoom', null);
-                svg.on('dblclick', (event) => {
-                    try {
-                        const currentState = stateManager.getState();
-                        if (currentState.isEditMode && currentState.isDrawing) {
-                            const currentYear = currentState.currentYear || 0;
-                            if (currentState.currentTool === 'line' && currentState.tempLinePoints.length >= 2) {
-                                const newLine = {
-                                    id: Date.now(),
-                                    points: currentState.tempLinePoints.slice(),
-                                    properties: [{
-                                        year: currentYear,
-                                        name: '新しい線',
-                                        description: '',
-                                    }],
-                                };
-                                DataStore.addLine(newLine);
-                                stateManager.setState({
-                                    isDrawing: false,
-                                    tempLinePoints: [],
-                                });
-                                renderData();
-                                UI.showLineEditForm(newLine, DataStore, renderData, true);
-                            } else if (currentState.currentTool === 'polygon' && currentState.tempPolygonPoints.length >= 3) {
-                                const newPolygon = {
-                                    id: Date.now(),
-                                    points: currentState.tempPolygonPoints.slice(),
-                                    properties: [{
-                                        year: currentYear,
-                                        name: '新しい面',
-                                        description: '',
-                                    }],
-                                };
-                                DataStore.addPolygon(newPolygon);
-                                stateManager.setState({
-                                    isDrawing: false,
-                                    tempPolygonPoints: [],
-                                });
-                                renderData();
-                                UI.showPolygonEditForm(newPolygon, DataStore, renderData, true);
-                            } else {
-                                UI.showNotification('ポイントが足りません。', 'error');
-                            }
-
-                            if (state.debugMode) {
-                                console.info(`地図上でダブルクリックが発生しました。ツール: ${currentState.currentTool}`);
-                            }
-                        }
-                    } catch (error) {
-                        console.error('地図のダブルクリックイベントでエラーが発生しました:', error);
-                        UI.showNotification('描画の確定中にエラーが発生しました。', 'error');
-                    }
-                });
-            } else {
-                console.error('SVG 要素が見つかりません');
-                UI.showNotification('地図が正しく読み込まれていません。', 'error');
             }
 
-            // 確定ボタンのイベントリスナー
             document.getElementById('confirmDrawButton').addEventListener('click', () => {
                 try {
                     const currentState = stateManager.getState();
                     const currentYear = currentState.currentYear || 0;
-                    if (currentState.isEditMode && currentState.isDrawing) {
+                    if (currentState.isAddMode && currentState.isDrawing) {
                         if (currentState.currentTool === 'line' && currentState.tempLinePoints.length >= 2) {
                             const newLine = {
                                 id: Date.now(),
@@ -239,7 +217,6 @@ const EventHandlers = (() => {
                 }
             });
 
-            // スライダーのイベントリスナー
             const timeSlider = document.getElementById('timeSlider');
             const currentYearDisplay = document.getElementById('currentYear');
 
@@ -259,10 +236,9 @@ const EventHandlers = (() => {
                 }
             });
 
-            // 保存・読み込みボタンのイベントリスナーや、IPC通信の設定
             document.getElementById('saveButton').addEventListener('click', () => {
                 try {
-                    const dataToSave = DataStore.getData(); // 修正点
+                    const dataToSave = DataStore.getData();
 
                     ipc.send('save-data', dataToSave);
 
@@ -275,7 +251,6 @@ const EventHandlers = (() => {
                 }
             });
 
-            // 読み込みボタンのクリックイベント内
             document.getElementById('loadButton').addEventListener('click', () => {
                 try {
                     if (DataStore.hasUnsavedChanges()) {
@@ -284,7 +259,6 @@ const EventHandlers = (() => {
                             message: '保存されていない変更があります。続行しますか？',
                         }).then((result) => {
                             if (result) {
-                                // データの読み込み処理
                                 ipc.send('load-data');
                             }
                         }).catch((error) => {
@@ -300,15 +274,12 @@ const EventHandlers = (() => {
                 }
             });
 
-            // メインプロセスからのデータ受信
-            // 読み込み時にUIを更新
             ipc.on('load-data-reply', (data) => {
                 try {
                     if (data) {
                         DataStore.loadData(data);
                         DataStore.resetUnsavedChanges();
 
-                        // メタデータの状態を更新
                         stateManager.setState({
                             sliderMin: data.metadata && data.metadata.sliderMin !== undefined ? data.metadata.sliderMin : 0,
                             sliderMax: data.metadata && data.metadata.sliderMax !== undefined ? data.metadata.sliderMax : 10000,
@@ -317,8 +288,8 @@ const EventHandlers = (() => {
                             currentYear: data.metadata && data.metadata.sliderMin !== undefined ? data.metadata.sliderMin : 0,
                         });
 
-                        UI.updateSlider();    // スライダーのUIを更新
-                        UI.updateWorldInfo(); // 世界情報のUIを更新
+                        UI.updateSlider();
+                        UI.updateWorldInfo();
                         UI.updateUI();
                         renderData();
 
@@ -350,7 +321,6 @@ const EventHandlers = (() => {
                 }
             });
 
-            // スライダーの最小・最大値の更新ボタンのイベントリスナー
             document.getElementById('updateSliderButton').addEventListener('click', () => {
                 try {
                     const min = parseInt(document.getElementById('sliderMin').value, 10);
@@ -367,7 +337,7 @@ const EventHandlers = (() => {
                         currentYear: Math.max(state.currentYear, min),
                     });
 
-                    UI.updateSlider(); // 追加
+                    UI.updateSlider();
                     renderData();
 
                     if (state.debugMode) {
@@ -379,7 +349,6 @@ const EventHandlers = (() => {
                 }
             });
 
-            // 世界の名前と概要の保存ボタンのイベントリスナー
             document.getElementById('saveWorldSettingsButton').addEventListener('click', () => {
                 try {
                     const name = document.getElementById('worldName').value;
@@ -390,7 +359,7 @@ const EventHandlers = (() => {
                         worldDescription: description,
                     });
 
-                    UI.updateWorldInfo(); // 追加
+                    UI.updateWorldInfo();
 
                     if (state.debugMode) {
                         console.info('世界の名前と概要が更新されました。');
@@ -401,19 +370,17 @@ const EventHandlers = (() => {
                 }
             });
 
-            // 設定ボタンのイベントリスナー（追加）
             document.getElementById('settingsButton').addEventListener('click', () => {
                 try {
                     const settingsModal = document.getElementById('settingsModal');
                     settingsModal.style.display = 'block';
-                    UI.populateSettings(); // 設定ウィンドウのフィールドを現在の状態で更新
+                    UI.populateSettings();
                 } catch (error) {
                     console.error('settingsButton のクリックイベントでエラーが発生しました:', error);
                     UI.showNotification('設定ウィンドウの表示中にエラーが発生しました。', 'error');
                 }
             });
 
-            // 設定ウィンドウの閉じるボタンのイベントリスナー（追加）
             document.getElementById('closeSettingsButton').addEventListener('click', () => {
                 try {
                     const settingsModal = document.getElementById('settingsModal');
@@ -424,7 +391,6 @@ const EventHandlers = (() => {
                 }
             });
 
-            // モーダル外クリックで閉じる（追加）
             window.addEventListener('click', (event) => {
                 try {
                     const settingsModal = document.getElementById('settingsModal');
