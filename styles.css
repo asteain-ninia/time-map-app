@@ -276,3 +276,15 @@ button.active {
     stroke: orange;
     stroke-width: 4;
 }
+
+/* エッジハンドルのスタイル */
+.edge-handle {
+    cursor: pointer;
+    fill: yellow;
+}
+
+/* 頂点ハンドルのスタイル */
+.vertex-handle {
+    cursor: move;
+    fill: orange;
+}

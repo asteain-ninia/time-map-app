@@ -190,6 +190,10 @@ const UI = (() => {
         }
     }
 
+    /**
+     * ポイント編集フォーム表示
+     * ログや処理は元通り、コメント増やした
+     */
     function showEditForm(point, DataStore, renderData) {
         try {
             if (stateManager.getState().debugMode) {
@@ -273,10 +277,7 @@ const UI = (() => {
             document.getElementById('cancelEditButton').onclick = () => {
                 try {
                     form.style.display = 'none';
-                    stateManager.setState({
-                        isDrawing: false,
-                        tempPoint: null,
-                    });
+                    stateManager.setState({ isDrawing: false, tempPoint: null });
                     renderData();
                 } catch (error) {
                     console.error('cancelEditButton のクリックイベントでエラーが発生しました:', error);
@@ -288,10 +289,7 @@ const UI = (() => {
                     if (point) {
                         DataStore.removePoint(point.id);
                     }
-                    stateManager.setState({
-                        isDrawing: false,
-                        tempPoint: null,
-                    });
+                    stateManager.setState({ isDrawing: false, tempPoint: null });
                     renderData();
                     form.style.display = 'none';
                 } catch (error) {
@@ -304,7 +302,11 @@ const UI = (() => {
         }
     }
 
-    function showLineEditForm(line, DataStore, renderData, isNewLine = false) {
+    /**
+     * ライン編集フォーム
+     * オブジェクト削除ボタンは元々存在。特に追加表現なし
+     */
+    function showLineEditForm(line, DataStore, renderData, isNewLine = false, showDeleteButton = false) {
         try {
             if (stateManager.getState().debugMode) {
                 console.info('showLineEditForm() が呼び出されました。');
@@ -385,6 +387,7 @@ const UI = (() => {
                 }
             };
 
+            document.getElementById('deleteLineButton').style.display = showDeleteButton ? 'inline-block' : 'none';
             document.getElementById('deleteLineButton').onclick = () => {
                 try {
                     DataStore.removeLine(line.id);
@@ -404,7 +407,10 @@ const UI = (() => {
         }
     }
 
-    function showPolygonEditForm(polygon, DataStore, renderData, isNewPolygon = false) {
+    /**
+     * ポリゴン編集フォーム
+     */
+    function showPolygonEditForm(polygon, DataStore, renderData, isNewPolygon = false, showDeleteButton = false) {
         try {
             if (stateManager.getState().debugMode) {
                 console.info('showPolygonEditForm() が呼び出されました。');
@@ -485,6 +491,7 @@ const UI = (() => {
                 }
             };
 
+            document.getElementById('deletePolygonButton').style.display = showDeleteButton ? 'inline-block' : 'none';
             document.getElementById('deletePolygonButton').onclick = () => {
                 try {
                     DataStore.removePolygon(polygon.id);

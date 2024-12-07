@@ -1,9 +1,10 @@
 // eventHandlers.js
 
 import stateManager from './stateManager.js';
+import MapModule from './map.js';
 
 const EventHandlers = (() => {
-    function setupEventListeners(DataStore, MapModule, UI, ipc, renderData) {
+    function setupEventListeners(DataStore, MapModuleInstance, UI, ipc, renderData) {
         try {
             let state = stateManager.getState();
 
@@ -13,24 +14,28 @@ const EventHandlers = (() => {
 
             document.getElementById('addModeButton').addEventListener('click', () => {
                 try {
-                    const isAddMode = !state.isAddMode;
-                    stateManager.setState({
-                        isAddMode,
-                        isEditMode: false,
-                        currentTool: isAddMode ? 'select' : 'select',
-                        isDrawing: false,
-                        tempPoint: null,
-                        tempLinePoints: [],
-                        tempPolygonPoints: [],
-                        selectedFeature: null,
-                        isDragging: false,
-                    });
-                    UI.updateUI();
-                    renderData();
+                    // モード変更時に不正オブジェクトチェック
+                    confirmObjectValidityBeforeModeChange(() => {
+                        const isAddMode = !state.isAddMode;
+                        stateManager.setState({
+                            isAddMode,
+                            isEditMode: false,
+                            currentTool: isAddMode ? 'select' : 'select',
+                            isDrawing: false,
+                            tempPoint: null,
+                            tempLinePoints: [],
+                            tempPolygonPoints: [],
+                            selectedFeature: null,
+                            isDragging: false,
+                            selectedVertices: []
+                        });
+                        UI.updateUI();
+                        renderData();
 
-                    if (state.debugMode) {
-                        console.info('追加モードが切り替えられました:', isAddMode);
-                    }
+                        if (state.debugMode) {
+                            console.info('追加モードが切り替えられました:', isAddMode);
+                        }
+                    });
                 } catch (error) {
                     console.error('addModeButton のクリックイベントでエラーが発生しました:', error);
                     UI.showNotification('追加モードの切り替え中にエラーが発生しました。', 'error');
@@ -39,24 +44,27 @@ const EventHandlers = (() => {
 
             document.getElementById('editModeButton').addEventListener('click', () => {
                 try {
-                    const isEditMode = !state.isEditMode;
-                    stateManager.setState({
-                        isEditMode,
-                        isAddMode: false,
-                        currentTool: isEditMode ? 'select' : 'select',
-                        isDrawing: false,
-                        tempPoint: null,
-                        tempLinePoints: [],
-                        tempPolygonPoints: [],
-                        selectedFeature: null,
-                        isDragging: false,
-                    });
-                    UI.updateUI();
-                    renderData();
+                    confirmObjectValidityBeforeModeChange(() => {
+                        const isEditMode = !state.isEditMode;
+                        stateManager.setState({
+                            isEditMode,
+                            isAddMode: false,
+                            currentTool: isEditMode ? 'select' : 'select',
+                            isDrawing: false,
+                            tempPoint: null,
+                            tempLinePoints: [],
+                            tempPolygonPoints: [],
+                            selectedFeature: null,
+                            isDragging: false,
+                            selectedVertices: []
+                        });
+                        UI.updateUI();
+                        renderData();
 
-                    if (state.debugMode) {
-                        console.info('編集モードが切り替えられました:', isEditMode);
-                    }
+                        if (state.debugMode) {
+                            console.info('編集モードが切り替えられました:', isEditMode);
+                        }
+                    });
                 } catch (error) {
                     console.error('editModeButton のクリックイベントでエラーが発生しました:', error);
                     UI.showNotification('編集モードの切り替え中にエラーが発生しました。', 'error');
@@ -86,6 +94,7 @@ const EventHandlers = (() => {
                             tempPolygonPoints: [],
                             selectedFeature: null,
                             isDragging: false,
+                            selectedVertices: []
                         });
                         UI.updateUI();
                         renderData();
@@ -105,17 +114,40 @@ const EventHandlers = (() => {
                 svg.on('click', (event) => {
                     try {
                         const currentState = stateManager.getState();
-                        if (currentState.isAddMode) {
-                            const [x, y] = d3.pointer(event);
-                            const transform = d3.zoomTransform(svg.node());
-                            const scaledX = (x - transform.x) / transform.k;
-                            const scaledY = (y - transform.y) / transform.k;
+                        const [x, y] = d3.pointer(event);
+                        const transform = d3.zoomTransform(svg.node());
+                        const scaledX = (x - transform.x) / transform.k;
+                        const scaledY = (y - transform.y) / transform.k;
 
-                            const mapWidth = MapModule.getMapWidth();
-                            const offsetXValue = Math.floor(scaledX / mapWidth) * mapWidth;
-                            const adjustedX = scaledX % mapWidth;
-                            const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
-                            const finalX = correctedX + offsetXValue;
+                        const mapWidth = MapModule.getMapWidth();
+                        const offsetXValue = Math.floor(scaledX / mapWidth) * mapWidth;
+                        const adjustedX = scaledX % mapWidth;
+                        const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
+                        const finalX = correctedX + offsetXValue;
+
+                        // 不完全なライン/ポリゴンに頂点追加（1点状態）
+                        if (currentState.isEditMode && (currentState.currentTool === 'lineVertexEdit' || currentState.currentTool === 'polygonVertexEdit') && currentState.selectedFeature) {
+                            const feature = currentState.selectedFeature;
+                            const isPolygon = currentState.currentTool === 'polygonVertexEdit';
+                            const requiredMin = isPolygon ? 3 : 2;
+
+                            if (feature.points && feature.points.length < requiredMin) {
+                                // 不足しているのでクリックで頂点追加
+                                feature.points.push({ x: finalX, y: scaledY });
+                                if (currentState.currentTool === 'lineVertexEdit') {
+                                    DataStore.updateLine(feature);
+                                } else {
+                                    DataStore.updatePolygon(feature);
+                                }
+                                renderData();
+                                return;
+                            }
+                        }
+
+                        if (currentState.isAddMode) {
+                            if (state.debugMode) {
+                                console.info(`追加モードでクリックが発生しました。ツール: ${currentState.currentTool}, 座標: (${finalX}, ${scaledY})`);
+                            }
 
                             if (currentState.currentTool === 'point') {
                                 stateManager.setState({
@@ -150,10 +182,6 @@ const EventHandlers = (() => {
                                 }
                                 renderData();
                             }
-
-                            if (state.debugMode) {
-                                console.info(`地図上でクリックが発生しました。ツール: ${currentState.currentTool}, 座標: (${finalX}, ${scaledY})`);
-                            }
                         }
                     } catch (error) {
                         console.error('地図のクリックイベントでエラーが発生しました:', error);
@@ -184,7 +212,7 @@ const EventHandlers = (() => {
                                 tempPoint: null,
                             });
                             renderData();
-                            UI.showLineEditForm(newLine, DataStore, renderData, true);
+                            UI.showLineEditForm(newLine, DataStore, renderData, true, true);
                         } else if (currentState.currentTool === 'polygon' && currentState.tempPolygonPoints.length >= 3) {
                             const newPolygon = {
                                 id: Date.now(),
@@ -202,7 +230,7 @@ const EventHandlers = (() => {
                                 tempPoint: null,
                             });
                             renderData();
-                            UI.showPolygonEditForm(newPolygon, DataStore, renderData, true);
+                            UI.showPolygonEditForm(newPolygon, DataStore, renderData, true, true);
                         } else {
                             UI.showNotification('ポイントが足りません。', 'error');
                         }
@@ -239,7 +267,6 @@ const EventHandlers = (() => {
             document.getElementById('saveButton').addEventListener('click', () => {
                 try {
                     const dataToSave = DataStore.getData();
-
                     ipc.send('save-data', dataToSave);
 
                     if (state.debugMode) {
@@ -286,6 +313,12 @@ const EventHandlers = (() => {
                             worldName: data.metadata && data.metadata.worldName ? data.metadata.worldName : '',
                             worldDescription: data.metadata && data.metadata.worldDescription ? data.metadata.worldDescription : '',
                             currentYear: data.metadata && data.metadata.sliderMin !== undefined ? data.metadata.sliderMin : 0,
+                            selectedFeature: null,
+                            isDrawing: false,
+                            tempPoint: null,
+                            tempLinePoints: [],
+                            tempPolygonPoints: [],
+                            selectedVertices: []
                         });
 
                         UI.updateSlider();
@@ -401,6 +434,65 @@ const EventHandlers = (() => {
                     console.error('モーダル外クリックイベントでエラーが発生しました:', error);
                 }
             });
+
+            document.addEventListener('keydown', (e) => {
+                try {
+                    if (e.key === 'Delete') {
+                        const state = stateManager.getState();
+                        const { selectedFeature } = state;
+
+                        if (selectedFeature && (state.currentTool === 'lineVertexEdit' || state.currentTool === 'polygonVertexEdit')) {
+                            MapModule.removeSelectedVertices();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Deleteキー押下時にエラーが発生しました:', error);
+                }
+            });
+
+            /**
+             * モード変更前にオブジェクト有効性を確認する関数
+             * 不正なライン・ポリゴン（頂点不足）の場合、ダイアログ表示
+             * @param {Function} callback - 有効または削除で決定後呼び出す
+             */
+            function confirmObjectValidityBeforeModeChange(callback) {
+                const state = stateManager.getState();
+                const selectedFeature = state.selectedFeature;
+                if (!selectedFeature) {
+                    callback();
+                    return;
+                }
+
+                // 現在のツールがラインまたはポリゴン頂点編集モードのとき、不足チェック
+                if ((state.currentTool === 'lineVertexEdit' && selectedFeature.points && selectedFeature.points.length < 2) ||
+                    (state.currentTool === 'polygonVertexEdit' && selectedFeature.points && selectedFeature.points.length < 3)) {
+                    ipc.invoke('show-confirm-dialog', {
+                        title: 'データの確認',
+                        message: 'このオブジェクトは有効な形状ではありません。削除しますか？'
+                    }).then(result => {
+                        if (result) {
+                            // 削除実行
+                            if (state.currentTool === 'lineVertexEdit') {
+                                DataStore.removeLine(selectedFeature.id);
+                            } else if (state.currentTool === 'polygonVertexEdit') {
+                                DataStore.removePolygon(selectedFeature.id);
+                            }
+                            stateManager.setState({ selectedFeature: null, selectedVertices: [] });
+                            renderData();
+                            callback();
+                        } else {
+                            // キャンセル時
+                            UI.showNotification('不正なオブジェクトが残っています。頂点を追加してください。', 'warning');
+                        }
+                    }).catch(error => {
+                        console.error('確認ダイアログの表示中にエラーが発生しました:', error);
+                        UI.showNotification('確認中にエラーが発生しました。', 'error');
+                    });
+                } else {
+                    // 有効ならそのまま
+                    callback();
+                }
+            }
 
         } catch (error) {
             console.error('setupEventListeners 関数内でエラーが発生しました:', error);
