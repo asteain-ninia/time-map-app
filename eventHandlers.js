@@ -85,23 +85,25 @@ const EventHandlers = (() => {
             ].forEach(toolId => {
                 document.getElementById(toolId).addEventListener('click', () => {
                     try {
-                        const toolName = toolId.replace('Tool', '');
-                        stateManager.setState({
-                            currentTool: toolName,
-                            isDrawing: false,
-                            tempPoint: null,
-                            tempLinePoints: [],
-                            tempPolygonPoints: [],
-                            selectedFeature: null,
-                            isDragging: false,
-                            selectedVertices: []
-                        });
-                        UI.updateUI();
-                        renderData();
+                        confirmObjectValidityBeforeModeChange(() => {
+                            const toolName = toolId.replace('Tool', '');
+                            stateManager.setState({
+                                currentTool: toolName,
+                                isDrawing: false,
+                                tempPoint: null,
+                                tempLinePoints: [],
+                                tempPolygonPoints: [],
+                                selectedFeature: null,
+                                isDragging: false,
+                                selectedVertices: []
+                            });
+                            UI.updateUI();
+                            renderData();
 
-                        if (state.debugMode) {
-                            console.info(`${toolName} ツールが選択されました。`);
-                        }
+                            if (state.debugMode) {
+                                console.info(`${toolName} ツールが選択されました。`);
+                            }
+                        });
                     } catch (error) {
                         console.error(`${toolId} のクリックイベントでエラーが発生しました:`, error);
                         UI.showNotification('ツールの切り替え中にエラーが発生しました。', 'error');
@@ -125,14 +127,14 @@ const EventHandlers = (() => {
                         const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
                         const finalX = correctedX + offsetXValue;
 
-                        // 不完全なライン/ポリゴンに頂点追加（1点状態）
+                        // 頂点不足時のクリック追加処理
                         if (currentState.isEditMode && (currentState.currentTool === 'lineVertexEdit' || currentState.currentTool === 'polygonVertexEdit') && currentState.selectedFeature) {
                             const feature = currentState.selectedFeature;
                             const isPolygon = currentState.currentTool === 'polygonVertexEdit';
                             const requiredMin = isPolygon ? 3 : 2;
 
                             if (feature.points && feature.points.length < requiredMin) {
-                                // 不足しているのでクリックで頂点追加
+                                // 頂点不足なのでクリックで追加
                                 feature.points.push({ x: finalX, y: scaledY });
                                 if (currentState.currentTool === 'lineVertexEdit') {
                                     DataStore.updateLine(feature);
@@ -304,6 +306,17 @@ const EventHandlers = (() => {
             ipc.on('load-data-reply', (data) => {
                 try {
                     if (data) {
+                        // ロード時にidがない場合付与（不正データ対策）
+                        if (data.points) {
+                            data.points.forEach(p => { if (!p.id) p.id = Date.now() + Math.random(); });
+                        }
+                        if (data.lines) {
+                            data.lines.forEach(l => { if (!l.id) l.id = Date.now() + Math.random(); });
+                        }
+                        if (data.polygons) {
+                            data.polygons.forEach(pg => { if (!pg.id) pg.id = Date.now() + Math.random(); });
+                        }
+
                         DataStore.loadData(data);
                         DataStore.resetUnsavedChanges();
 
@@ -452,20 +465,27 @@ const EventHandlers = (() => {
 
             /**
              * モード変更前にオブジェクト有効性を確認する関数
-             * 不正なライン・ポリゴン（頂点不足）の場合、ダイアログ表示
-             * @param {Function} callback - 有効または削除で決定後呼び出す
              */
             function confirmObjectValidityBeforeModeChange(callback) {
                 const state = stateManager.getState();
                 const selectedFeature = state.selectedFeature;
+
+                // 選択されたフィーチャがなければ続行
                 if (!selectedFeature) {
                     callback();
                     return;
                 }
 
-                // 現在のツールがラインまたはポリゴン頂点編集モードのとき、不足チェック
-                if ((state.currentTool === 'lineVertexEdit' && selectedFeature.points && selectedFeature.points.length < 2) ||
-                    (state.currentTool === 'polygonVertexEdit' && selectedFeature.points && selectedFeature.points.length < 3)) {
+                // 念のためid付与
+                if (!selectedFeature.id) {
+                    selectedFeature.id = Date.now() + Math.random();
+                }
+
+                // 頂点不足チェック
+                if (
+                    (state.currentTool === 'lineVertexEdit' && selectedFeature.points && selectedFeature.points.length < 2) ||
+                    (state.currentTool === 'polygonVertexEdit' && selectedFeature.points && selectedFeature.points.length < 3)
+                ) {
                     ipc.invoke('show-confirm-dialog', {
                         title: 'データの確認',
                         message: 'このオブジェクトは有効な形状ではありません。削除しますか？'

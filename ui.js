@@ -190,10 +190,6 @@ const UI = (() => {
         }
     }
 
-    /**
-     * ポイント編集フォーム表示
-     * ログや処理は元通り、コメント増やした
-     */
     function showEditForm(point, DataStore, renderData) {
         try {
             if (stateManager.getState().debugMode) {
@@ -249,6 +245,12 @@ const UI = (() => {
                             ],
                         };
                         DataStore.addPoint(newPoint);
+                        // 新規ポイントを選択状態にして即ドラッグ可能にする
+                        stateManager.setState({
+                            selectedFeature: newPoint,
+                            isDrawing: false,
+                            tempPoint: null,
+                        });
                     } else {
                         if (!point.properties || !Array.isArray(point.properties)) {
                             point.properties = [];
@@ -260,12 +262,13 @@ const UI = (() => {
                             description: description,
                         });
                         DataStore.updatePoint(point);
+                        stateManager.setState({
+                            selectedFeature: point,
+                            isDrawing: false,
+                            tempPoint: null,
+                        });
                     }
 
-                    stateManager.setState({
-                        isDrawing: false,
-                        tempPoint: null,
-                    });
                     renderData();
                     form.style.display = 'none';
                 } catch (error) {
@@ -302,10 +305,6 @@ const UI = (() => {
         }
     }
 
-    /**
-     * ライン編集フォーム
-     * オブジェクト削除ボタンは元々存在。特に追加表現なし
-     */
     function showLineEditForm(line, DataStore, renderData, isNewLine = false, showDeleteButton = false) {
         try {
             if (stateManager.getState().debugMode) {
@@ -361,6 +360,7 @@ const UI = (() => {
                         isDrawing: false,
                         tempLinePoints: [],
                         tempPoint: null,
+                        selectedFeature: line
                     });
                     renderData();
                     form.style.display = 'none';
@@ -407,9 +407,6 @@ const UI = (() => {
         }
     }
 
-    /**
-     * ポリゴン編集フォーム
-     */
     function showPolygonEditForm(polygon, DataStore, renderData, isNewPolygon = false, showDeleteButton = false) {
         try {
             if (stateManager.getState().debugMode) {
@@ -465,6 +462,7 @@ const UI = (() => {
                         isDrawing: false,
                         tempPolygonPoints: [],
                         tempPoint: null,
+                        selectedFeature: polygon
                     });
                     renderData();
                     form.style.display = 'none';
