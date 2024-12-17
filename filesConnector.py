@@ -37,3 +37,4 @@ with open(output_file, 'w', encoding='utf-8') as outfile:
                 outfile.write(f"\n\n--- End of {filename} ---\n")
 
 print(f'ファイルは {output_file} に結合されました。')
+print(f'拡張子： {extensions} が対象です。')
