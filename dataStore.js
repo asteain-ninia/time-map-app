@@ -17,7 +17,9 @@ const DataStore = (() => {
 
             return Array.from(points.values())
                 .map(point => {
-                    console.log('処理中のポイント:', point);
+                    if (stateManager.getState().debugMode) {
+                        console.log('処理中のポイント:', point);
+                    }
 
                     let properties = null;
 
@@ -39,13 +41,19 @@ const DataStore = (() => {
                         }
                     }
 
-                    console.log('取得されたプロパティ:', properties);
+                    if (!point.points || !Array.isArray(point.points) || point.points.length === 0) {
+                        // もし従来データが x,y を直接持っていれば変換
+                        if (point.x !== undefined && point.y !== undefined) {
+                            point.points = [{ x: point.x, y: point.y }];
+                        } else {
+                            point.points = [{ x: 0, y: 0 }];
+                        }
+                    }
 
                     if (properties) {
                         return {
                             id: point.id,
-                            x: point.x,
-                            y: point.y,
+                            points: point.points, // ポイントもpoints配列で統一
                             properties: point.properties,
                             originalPoint: point,
                             ...properties,
@@ -212,6 +220,18 @@ const DataStore = (() => {
             if (!point.properties || !Array.isArray(point.properties)) {
                 point.properties = [];
             }
+
+            // points配列がなければ作る
+            if (!point.points || !Array.isArray(point.points) || point.points.length === 0) {
+                if (point.x !== undefined && point.y !== undefined) {
+                    point.points = [{ x: point.x, y: point.y }];
+                    delete point.x;
+                    delete point.y;
+                } else {
+                    point.points = [{ x: 0, y: 0 }];
+                }
+            }
+
             points.set(point.id, point);
             unsavedChanges = true;
         } catch (error) {
@@ -226,6 +246,16 @@ const DataStore = (() => {
             }
 
             if (points.has(updatedPoint.id)) {
+                // points配列がなければ作る
+                if (!updatedPoint.points || !Array.isArray(updatedPoint.points) || updatedPoint.points.length === 0) {
+                    if (updatedPoint.x !== undefined && updatedPoint.y !== undefined) {
+                        updatedPoint.points = [{ x: updatedPoint.x, y: updatedPoint.y }];
+                        delete updatedPoint.x;
+                        delete updatedPoint.y;
+                    } else {
+                        updatedPoint.points = [{ x: 0, y: 0 }];
+                    }
+                }
                 points.set(updatedPoint.id, updatedPoint);
                 unsavedChanges = true;
             } else {
@@ -364,7 +394,19 @@ const DataStore = (() => {
             polygons.clear();
 
             if (data.points) {
-                data.points.forEach(point => points.set(point.id, point));
+                data.points.forEach(point => {
+                    // 読み込む際にもpoints配列がなければ作成
+                    if (!point.points || !Array.isArray(point.points) || point.points.length === 0) {
+                        if (point.x !== undefined && point.y !== undefined) {
+                            point.points = [{ x: point.x, y: point.y }];
+                            delete point.x;
+                            delete point.y;
+                        } else {
+                            point.points = [{ x: 0, y: 0 }];
+                        }
+                    }
+                    points.set(point.id, point);
+                });
             }
             if (data.lines) {
                 data.lines.forEach(line => lines.set(line.id, line));
