@@ -1,7 +1,10 @@
 // eventHandlers.js
 
 import stateManager from './stateManager.js';
-import MapModule from './map.js';
+import DataStore from './dataStore.js';
+import UI from './ui.js';
+import { removeSelectedVertices } from './src/map/mapInteraction.js';
+import { getMapWidth } from './src/map/mapRenderer.js';
 
 const EventHandlers = (() => {
     function setupEventListeners(DataStore, MapModuleInstance, UI, ipc, renderData) {
@@ -14,7 +17,6 @@ const EventHandlers = (() => {
 
             document.getElementById('addModeButton').addEventListener('click', () => {
                 try {
-                    // モード変更時に不正オブジェクトチェック
                     confirmObjectValidityBeforeModeChange(() => {
                         const isAddMode = !state.isAddMode;
                         stateManager.setState({
@@ -121,20 +123,22 @@ const EventHandlers = (() => {
                         const scaledX = (x - transform.x) / transform.k;
                         const scaledY = (y - transform.y) / transform.k;
 
-                        const mapWidth = MapModule.getMapWidth();
-                        const offsetXValue = Math.floor(scaledX / mapWidth) * mapWidth;
-                        const adjustedX = scaledX % mapWidth;
-                        const correctedX = adjustedX < 0 ? adjustedX + mapWidth : adjustedX;
+                        const mapWidthVal = getMapWidth();
+                        const offsetXValue = Math.floor(scaledX / mapWidthVal) * mapWidthVal;
+                        const adjustedX = scaledX % mapWidthVal;
+                        const correctedX = adjustedX < 0 ? adjustedX + mapWidthVal : adjustedX;
                         const finalX = correctedX + offsetXValue;
 
-                        // 頂点不足時のクリック追加処理
-                        if (currentState.isEditMode && (currentState.currentTool === 'lineVertexEdit' || currentState.currentTool === 'polygonVertexEdit') && currentState.selectedFeature) {
+                        if (
+                            currentState.isEditMode &&
+                            (currentState.currentTool === 'lineVertexEdit' || currentState.currentTool === 'polygonVertexEdit') &&
+                            currentState.selectedFeature
+                        ) {
                             const feature = currentState.selectedFeature;
                             const isPolygon = currentState.currentTool === 'polygonVertexEdit';
                             const requiredMin = isPolygon ? 3 : 2;
 
                             if (feature.points && feature.points.length < requiredMin) {
-                                // 頂点不足なのでクリックで追加
                                 feature.points.push({ x: finalX, y: scaledY });
                                 if (currentState.currentTool === 'lineVertexEdit') {
                                     DataStore.updateLine(feature);
@@ -306,7 +310,6 @@ const EventHandlers = (() => {
             ipc.on('load-data-reply', (data) => {
                 try {
                     if (data) {
-                        // ロード時にidがない場合付与（不正データ対策）
                         if (data.points) {
                             data.points.forEach(p => { if (!p.id) p.id = Date.now() + Math.random(); });
                         }
@@ -455,7 +458,7 @@ const EventHandlers = (() => {
                         const { selectedFeature } = state;
 
                         if (selectedFeature && (state.currentTool === 'lineVertexEdit' || state.currentTool === 'polygonVertexEdit')) {
-                            MapModule.removeSelectedVertices();
+                            removeSelectedVertices();
                         }
                     }
                 } catch (error) {
@@ -463,25 +466,19 @@ const EventHandlers = (() => {
                 }
             });
 
-            /**
-             * モード変更前にオブジェクト有効性を確認する関数
-             */
             function confirmObjectValidityBeforeModeChange(callback) {
                 const state = stateManager.getState();
                 const selectedFeature = state.selectedFeature;
 
-                // 選択されたフィーチャがなければ続行
                 if (!selectedFeature) {
                     callback();
                     return;
                 }
 
-                // 念のためid付与
                 if (!selectedFeature.id) {
                     selectedFeature.id = Date.now() + Math.random();
                 }
 
-                // 頂点不足チェック
                 if (
                     (state.currentTool === 'lineVertexEdit' && selectedFeature.points && selectedFeature.points.length < 2) ||
                     (state.currentTool === 'polygonVertexEdit' && selectedFeature.points && selectedFeature.points.length < 3)
@@ -491,7 +488,6 @@ const EventHandlers = (() => {
                         message: 'このオブジェクトは有効な形状ではありません。削除しますか？'
                     }).then(result => {
                         if (result) {
-                            // 削除実行
                             if (state.currentTool === 'lineVertexEdit') {
                                 DataStore.removeLine(selectedFeature.id);
                             } else if (state.currentTool === 'polygonVertexEdit') {
@@ -501,7 +497,6 @@ const EventHandlers = (() => {
                             renderData();
                             callback();
                         } else {
-                            // キャンセル時
                             UI.showNotification('不正なオブジェクトが残っています。頂点を追加してください。', 'warning');
                         }
                     }).catch(error => {
@@ -509,7 +504,6 @@ const EventHandlers = (() => {
                         UI.showNotification('確認中にエラーが発生しました。', 'error');
                     });
                 } else {
-                    // 有効ならそのまま
                     callback();
                 }
             }

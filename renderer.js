@@ -1,22 +1,31 @@
 // renderer.js
 
 import DataStore from './dataStore.js';
-import MapModule from './map.js';
 import UI from './ui.js';
 import EventHandlers from './eventHandlers.js';
 import stateManager from './stateManager.js';
+
+import {
+    loadMap,
+    renderData,
+    getMapWidth,
+    getMapHeight,
+    disableMapZoom,
+    enableMapZoom
+} from './src/map/mapRenderer.js';
+import { initInteraction } from './src/map/mapInteraction.js';
 
 (() => {
     let renderTimeout;
     const RENDER_DELAY = 50;
 
-    function renderData() {
+    function delayedRenderData() {
         if (renderTimeout) {
             clearTimeout(renderTimeout);
         }
         renderTimeout = setTimeout(() => {
             try {
-                MapModule.renderData();
+                renderData();
                 UI.updateEventList(DataStore);
                 UI.updateUI();
             } catch (error) {
@@ -31,10 +40,22 @@ import stateManager from './stateManager.js';
             UI.updateUI();
             UI.populateSettings();
 
-            MapModule.loadMap(DataStore, UI, renderData)
+            loadMap(DataStore, UI, delayedRenderData)
                 .then(() => {
+                    initInteraction({
+                        renderData: delayedRenderData,
+                        disableMapZoom,
+                        enableMapZoom
+                    });
+
                     const ipc = window.electronAPI;
-                    EventHandlers.setupEventListeners(DataStore, MapModule, UI, ipc, renderData);
+                    EventHandlers.setupEventListeners(
+                        DataStore,
+                        { renderData: delayedRenderData, getMapWidth },
+                        UI,
+                        ipc,
+                        delayedRenderData
+                    );
                 })
                 .catch((error) => {
                     console.error('Map のロード中にエラーが発生しました:', error);
