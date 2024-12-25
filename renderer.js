@@ -2,7 +2,6 @@
 
 import DataStore from './dataStore.js';
 import uiManager from './src/ui/uiManager.js';
-import EventHandlers from './eventHandlers.js';
 import stateManager from './stateManager.js';
 
 import {
@@ -13,6 +12,8 @@ import {
     disableMapZoom,
     enableMapZoom
 } from './src/map/mapRenderer.js';
+
+import { setupEventHandlers } from './src/eventHandlers/index.js';
 import { initInteraction } from './src/map/mapInteraction.js';
 
 (() => {
@@ -50,7 +51,9 @@ import { initInteraction } from './src/map/mapInteraction.js';
 
                     // ipcを取得
                     const ipc = window.electronAPI;
-                    EventHandlers.setupEventListeners(
+
+                    // ★ 分割後のイベントハンドラ設定を呼び出し
+                    setupEventHandlers(
                         DataStore,
                         { renderData: delayedRenderData, getMapWidth },
                         ipc,
