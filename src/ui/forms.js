@@ -2,9 +2,8 @@
 
 import { getPropertiesForYear } from '../../utils.js';
 import stateManager from '../../stateManager.js';
-import DataStore from '../../dataStore.js';
+import DataStore from '../dataStore/index.js';
 
-// ★ 追加: uiManagerをインポートして、hideAllForms()を呼べるようにする
 import uiManager from './uiManager.js';
 
 /**

@@ -2,7 +2,7 @@
 
 import stateManager from '../../stateManager.js';
 import uiManager from '../ui/uiManager.js';
-import DataStore from '../../dataStore.js';
+import DataStore from '../dataStore/index.js';
 
 /**
  * IPC通信関連のイベントリスナーを設定する

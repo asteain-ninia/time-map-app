@@ -1,8 +1,6 @@
 // src/map/mapRenderer.js
 
 import stateManager from '../../stateManager.js';
-import DataStore from '../../dataStore.js';
-import { getPropertiesForYear } from '../../utils.js';
 
 import {
     vertexDragStarted,
