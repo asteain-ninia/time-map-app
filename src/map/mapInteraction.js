@@ -1,8 +1,8 @@
-// mapInteraction.js
+// src/map/mapInteraction.js
 
 import stateManager from '../../stateManager.js';
 import DataStore from '../../dataStore.js';
-import UI from '../../ui.js';
+import tooltips from '../ui/tooltips.js';
 import { getPropertiesForYear } from '../../utils.js';
 
 let renderDataCallback;
@@ -135,7 +135,6 @@ function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
         // シフト押下 → トグル
         if (exists) {
             newSelection = selectedVertices.filter(v => !(v.featureId === feature.id && v.vertexIndex === vertexIndex));
-            // 頂点が全解除されてもフィーチャ自体は選択状態にしておく
         } else {
             newSelection = [...selectedVertices, { featureId: feature.id, vertexIndex }];
         }
@@ -169,7 +168,9 @@ function vertexDragStarted(event, dData, offsetX, feature) {
 
     d3.select(event.sourceEvent.target).raise().classed('active', true);
     disableMapZoomCallback();
-    UI.hideTooltip();
+
+    // ★ UI.hideTooltip(); → tooltips.hideTooltip();
+    tooltips.hideTooltip();
 
     dData._dragged = false;
 
@@ -252,8 +253,10 @@ function vertexDragEnded(event, dData, feature) {
     if (event.sourceEvent) {
         // ドラッグ終了時 → ライン/ポリゴン等の情報をツールチップ表示
         const tooltipData = getFeatureTooltipData(feature);
-        UI.showTooltip(event.sourceEvent, tooltipData);
-        UI.moveTooltip(event.sourceEvent);
+        // ★ UI.showTooltip(event.sourceEvent, tooltipData);
+        tooltips.showTooltip(event.sourceEvent, tooltipData);
+        // ★ UI.moveTooltip(event.sourceEvent);
+        tooltips.moveTooltip(event.sourceEvent);
     }
 
     if (dData._dragged) {
@@ -289,7 +292,8 @@ function edgeDragStarted(event, dData, offsetX, feature) {
     d3.select(event.sourceEvent.target).raise().classed('active', true);
     disableMapZoomCallback();
 
-    UI.hideTooltip();
+    // ★ UI.hideTooltip();
+    tooltips.hideTooltip();
 
     dData._dragged = false;
 
@@ -370,8 +374,10 @@ function edgeDragEnded(event, dData, feature) {
     if (event.sourceEvent) {
         // ドラッグ終了 → ライン/ポリゴンの情報ツールチップ
         const tooltipData = getFeatureTooltipData(feature);
-        UI.showTooltip(event.sourceEvent, tooltipData);
-        UI.moveTooltip(event.sourceEvent);
+        // ★ UI.showTooltip(event.sourceEvent, tooltipData);
+        tooltips.showTooltip(event.sourceEvent, tooltipData);
+        // ★ UI.moveTooltip(event.sourceEvent);
+        tooltips.moveTooltip(event.sourceEvent);
     }
 
     const st = stateManager.getState();

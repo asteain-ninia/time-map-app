@@ -2,12 +2,13 @@
 
 import stateManager from './stateManager.js';
 import DataStore from './dataStore.js';
-import UI from './ui.js';
+import uiManager from './src/ui/uiManager.js';
+import { showEditForm, showLineEditForm, showPolygonEditForm } from './src/ui/forms.js';
 import { removeSelectedVertices } from './src/map/mapInteraction.js';
 import { getMapWidth } from './src/map/mapRenderer.js';
 
 const EventHandlers = (() => {
-    function setupEventListeners(DataStore, MapModuleInstance, UI, ipc, renderData) {
+    function setupEventListeners(DataStore, MapModuleInstance, ipc, renderData) {
         try {
             let state = stateManager.getState();
 
@@ -31,7 +32,7 @@ const EventHandlers = (() => {
                             isDragging: false,
                             selectedVertices: []
                         });
-                        UI.updateUI();
+                        uiManager.updateUI();
                         renderData();
 
                         if (state.debugMode) {
@@ -40,7 +41,7 @@ const EventHandlers = (() => {
                     });
                 } catch (error) {
                     console.error('addModeButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('追加モードの切り替え中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('追加モードの切り替え中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -60,7 +61,7 @@ const EventHandlers = (() => {
                             isDragging: false,
                             selectedVertices: []
                         });
-                        UI.updateUI();
+                        uiManager.updateUI();
                         renderData();
 
                         if (state.debugMode) {
@@ -69,7 +70,7 @@ const EventHandlers = (() => {
                     });
                 } catch (error) {
                     console.error('editModeButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('編集モードの切り替え中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('編集モードの切り替え中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -99,7 +100,7 @@ const EventHandlers = (() => {
                                 isDragging: false,
                                 selectedVertices: []
                             });
-                            UI.updateUI();
+                            uiManager.updateUI();
                             renderData();
 
                             if (state.debugMode) {
@@ -108,7 +109,7 @@ const EventHandlers = (() => {
                         });
                     } catch (error) {
                         console.error(`${toolId} のクリックイベントでエラーが発生しました:`, error);
-                        UI.showNotification('ツールの切り替え中にエラーが発生しました。', 'error');
+                        uiManager.showNotification('ツールの切り替え中にエラーが発生しました。', 'error');
                     }
                 });
             });
@@ -129,6 +130,7 @@ const EventHandlers = (() => {
                         const correctedX = adjustedX < 0 ? adjustedX + mapWidthVal : adjustedX;
                         const finalX = correctedX + offsetXValue;
 
+                        // 編集モード & 頂点編集ツールの場合
                         if (
                             currentState.isEditMode &&
                             (currentState.currentTool === 'lineVertexEdit' || currentState.currentTool === 'polygonVertexEdit') &&
@@ -150,6 +152,7 @@ const EventHandlers = (() => {
                             }
                         }
 
+                        // 追加モードの場合
                         if (currentState.isAddMode) {
                             if (state.debugMode) {
                                 console.info(`追加モードでクリックが発生しました。ツール: ${currentState.currentTool}, 座標: (${finalX}, ${scaledY})`);
@@ -164,7 +167,9 @@ const EventHandlers = (() => {
                                     },
                                 });
                                 renderData();
-                                UI.showEditForm(null, DataStore, renderData);
+                                // 新規ポイント用フォーム
+                                showEditForm(null, renderData);
+
                             } else if (currentState.currentTool === 'line') {
                                 if (!currentState.isDrawing) {
                                     stateManager.setState({
@@ -176,6 +181,7 @@ const EventHandlers = (() => {
                                     stateManager.setState({ tempLinePoints: updatedPoints });
                                 }
                                 renderData();
+
                             } else if (currentState.currentTool === 'polygon') {
                                 if (!currentState.isDrawing) {
                                     stateManager.setState({
@@ -191,7 +197,7 @@ const EventHandlers = (() => {
                         }
                     } catch (error) {
                         console.error('地図のクリックイベントでエラーが発生しました:', error);
-                        UI.showNotification('地図上での操作中にエラーが発生しました。', 'error');
+                        uiManager.showNotification('地図上での操作中にエラーが発生しました。', 'error');
                     }
                 });
             }
@@ -218,7 +224,8 @@ const EventHandlers = (() => {
                                 tempPoint: null,
                             });
                             renderData();
-                            UI.showLineEditForm(newLine, DataStore, renderData, true, true);
+                            showLineEditForm(newLine, renderData, true, true);
+
                         } else if (currentState.currentTool === 'polygon' && currentState.tempPolygonPoints.length >= 3) {
                             const newPolygon = {
                                 id: Date.now(),
@@ -236,18 +243,15 @@ const EventHandlers = (() => {
                                 tempPoint: null,
                             });
                             renderData();
-                            UI.showPolygonEditForm(newPolygon, DataStore, renderData, true, true);
-                        } else {
-                            UI.showNotification('ポイントが足りません。', 'error');
-                        }
+                            showPolygonEditForm(newPolygon, renderData, true, true);
 
-                        if (state.debugMode) {
-                            console.info('描画が確定されました。');
+                        } else {
+                            // 頂点が足りない
                         }
                     }
                 } catch (error) {
                     console.error('confirmDrawButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('描画の確定中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('描画の確定中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -266,7 +270,6 @@ const EventHandlers = (() => {
                     }
                 } catch (error) {
                     console.error('時間スライダーの変更中にエラーが発生しました:', error);
-                    UI.showNotification('時間の変更中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -280,7 +283,7 @@ const EventHandlers = (() => {
                     }
                 } catch (error) {
                     console.error('saveButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('データの保存中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('データの保存中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -296,14 +299,14 @@ const EventHandlers = (() => {
                             }
                         }).catch((error) => {
                             console.error('確認ダイアログの表示中にエラーが発生しました:', error);
-                            UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                            uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
                         });
                     } else {
                         ipc.send('load-data');
                     }
                 } catch (error) {
                     console.error('loadButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -337,18 +340,18 @@ const EventHandlers = (() => {
                             selectedVertices: []
                         });
 
-                        UI.updateSlider();
-                        UI.updateWorldInfo();
-                        UI.updateUI();
+                        uiManager.updateSlider();
+                        uiManager.updateWorldInfo();
+                        uiManager.updateUI();
                         renderData();
 
-                        UI.showNotification('データが正常に読み込まれました。', 'info');
+                        uiManager.showNotification('データが正常に読み込まれました。', 'info');
                     } else {
-                        UI.showNotification('データの読み込みがキャンセルされました。', 'info');
+                        uiManager.showNotification('データの読み込みがキャンセルされました。', 'info');
                     }
                 } catch (error) {
                     console.error('load-data-reply イベントでエラーが発生しました:', error);
-                    UI.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -356,17 +359,17 @@ const EventHandlers = (() => {
                 try {
                     if (success) {
                         DataStore.resetUnsavedChanges();
-                        UI.showNotification('データが正常に保存されました。', 'info');
+                        uiManager.showNotification('データが正常に保存されました。', 'info');
 
                         if (state.debugMode) {
                             console.info('データの保存が完了しました。');
                         }
                     } else {
-                        UI.showNotification('データの保存中にエラーが発生しました。', 'error');
+                        uiManager.showNotification('データの保存中にエラーが発生しました。', 'error');
                     }
                 } catch (error) {
                     console.error('save-data-reply イベントでエラーが発生しました:', error);
-                    UI.showNotification('データの保存中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('データの保存中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -376,7 +379,7 @@ const EventHandlers = (() => {
                     const max = parseInt(document.getElementById('sliderMax').value, 10);
 
                     if (isNaN(min) || isNaN(max) || min >= max) {
-                        UI.showNotification('最小値と最大値を正しく入力してください。', 'error');
+                        uiManager.showNotification('最小値と最大値を正しく入力してください。', 'error');
                         return;
                     }
 
@@ -386,7 +389,7 @@ const EventHandlers = (() => {
                         currentYear: Math.max(state.currentYear, min),
                     });
 
-                    UI.updateSlider();
+                    uiManager.updateSlider();
                     renderData();
 
                     if (state.debugMode) {
@@ -394,7 +397,7 @@ const EventHandlers = (() => {
                     }
                 } catch (error) {
                     console.error('updateSliderButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('スライダーの更新中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('スライダーの更新中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -408,14 +411,10 @@ const EventHandlers = (() => {
                         worldDescription: description,
                     });
 
-                    UI.updateWorldInfo();
-
-                    if (state.debugMode) {
-                        console.info('世界の名前と概要が更新されました。');
-                    }
+                    uiManager.updateWorldInfo();
                 } catch (error) {
                     console.error('saveWorldSettingsButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('世界情報の保存中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('世界情報の保存中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -423,10 +422,10 @@ const EventHandlers = (() => {
                 try {
                     const settingsModal = document.getElementById('settingsModal');
                     settingsModal.style.display = 'block';
-                    UI.populateSettings();
+                    uiManager.populateSettings();
                 } catch (error) {
                     console.error('settingsButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('設定ウィンドウの表示中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('設定ウィンドウの表示中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -436,7 +435,7 @@ const EventHandlers = (() => {
                     settingsModal.style.display = 'none';
                 } catch (error) {
                     console.error('closeSettingsButton のクリックイベントでエラーが発生しました:', error);
-                    UI.showNotification('設定ウィンドウの閉鎖中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('設定ウィンドウの閉鎖中にエラーが発生しました。', 'error');
                 }
             });
 
@@ -497,11 +496,11 @@ const EventHandlers = (() => {
                             renderData();
                             callback();
                         } else {
-                            UI.showNotification('不正なオブジェクトが残っています。頂点を追加してください。', 'warning');
+                            uiManager.showNotification('不正なオブジェクトが残っています。頂点を追加してください。', 'warning');
                         }
                     }).catch(error => {
                         console.error('確認ダイアログの表示中にエラーが発生しました:', error);
-                        UI.showNotification('確認中にエラーが発生しました。', 'error');
+                        uiManager.showNotification('確認中にエラーが発生しました。', 'error');
                     });
                 } else {
                     callback();
@@ -510,7 +509,7 @@ const EventHandlers = (() => {
 
         } catch (error) {
             console.error('setupEventListeners 関数内でエラーが発生しました:', error);
-            UI.showNotification('イベントリスナーの設定中にエラーが発生しました。', 'error');
+            uiManager.showNotification('イベントリスナーの設定中にエラーが発生しました。', 'error');
         }
     }
 

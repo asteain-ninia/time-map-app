@@ -1,7 +1,7 @@
 // renderer.js
 
 import DataStore from './dataStore.js';
-import UI from './ui.js';
+import uiManager from './src/ui/uiManager.js';
 import EventHandlers from './eventHandlers.js';
 import stateManager from './stateManager.js';
 
@@ -26,21 +26,21 @@ import { initInteraction } from './src/map/mapInteraction.js';
         renderTimeout = setTimeout(() => {
             try {
                 renderData();
-                UI.updateEventList(DataStore);
-                UI.updateUI();
+                uiManager.updateEventList(DataStore);
+                uiManager.updateUI();
             } catch (error) {
                 console.error('データのレンダリング中にエラーが発生しました:', error);
-                UI.showNotification('データの表示中にエラーが発生しました。', 'error');
+                uiManager.showNotification('データの表示中にエラーが発生しました。', 'error');
             }
         }, RENDER_DELAY);
     }
 
     function init() {
         try {
-            UI.updateUI();
-            UI.populateSettings();
+            uiManager.updateUI();
+            uiManager.populateSettings();
 
-            loadMap(DataStore, UI, delayedRenderData)
+            loadMap(DataStore, null, delayedRenderData)
                 .then(() => {
                     initInteraction({
                         renderData: delayedRenderData,
@@ -48,22 +48,22 @@ import { initInteraction } from './src/map/mapInteraction.js';
                         enableMapZoom
                     });
 
+                    // ipcを取得
                     const ipc = window.electronAPI;
                     EventHandlers.setupEventListeners(
                         DataStore,
                         { renderData: delayedRenderData, getMapWidth },
-                        UI,
                         ipc,
                         delayedRenderData
                     );
                 })
                 .catch((error) => {
                     console.error('Map のロード中にエラーが発生しました:', error);
-                    UI.showNotification('地図の読み込み中にエラーが発生しました。', 'error');
+                    uiManager.showNotification('地図の読み込み中にエラーが発生しました。', 'error');
                 });
         } catch (error) {
             console.error('アプリケーションの初期化中にエラーが発生しました:', error);
-            UI.showNotification('アプリケーションの起動中にエラーが発生しました。', 'error');
+            uiManager.showNotification('アプリケーションの起動中にエラーが発生しました。', 'error');
         }
     }
 

@@ -1,5 +1,8 @@
 /* styles.css */
 
+/* 全て省略せず再掲します */
+
+/* ベース: リセットと基本 */
 body {
     margin: 0;
     overflow: hidden;
@@ -112,15 +115,15 @@ button.active {
     width: 250px;
 }
 
-/* フォーム・ウィンドウ */
+/* フォーム・ウィンドウ（ドラッグ可能要素） */
 #detailWindow,
 #editForm,
 #lineEditForm,
 #polygonEditForm {
+    /* 中央寄せするための left: 50% + transform は削除 */
+    /* top: 100px; left: 50%; transform: translateX(-50%); */
     position: absolute;
-    top: 100px;
-    left: 50%;
-    transform: translateX(-50%);
+    /* 位置はJSで制御 */
     background-color: white;
     border: 1px solid #ccc;
     padding: 10px;
@@ -129,6 +132,7 @@ button.active {
     cursor: move;
 }
 
+/* ドラッグ時、要素に 'dragging' クラスが付与される */
 #detailWindow.dragging,
 #editForm.dragging,
 #lineEditForm.dragging,
@@ -236,10 +240,8 @@ button.active {
     margin: 5px 0 0 0;
 }
 
-/* 選択表示 */
+/* 選択表示(ハイライト) */
 .selected {
     stroke: orange !important;
     stroke-width: 4 !important;
 }
-
-/* 頂点ハンドル等はmap.jsで動的に色やカーソルを制御 */
