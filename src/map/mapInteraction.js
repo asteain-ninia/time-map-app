@@ -1,6 +1,6 @@
 // src/map/mapInteraction.js
 
-import stateManager from '../../stateManager.js';
+import stateManager from '../state/index.js';
 import DataStore from '../dataStore/index.js';
 import tooltips from '../ui/tooltips.js';
 import { getPropertiesForYear } from '../utils/index.js';

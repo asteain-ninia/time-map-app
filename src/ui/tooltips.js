@@ -1,6 +1,6 @@
 // src/ui/tooltips.js
 
-import stateManager from '../../stateManager.js';
+import stateManager from '../state/index.js';
 
 /**
  * ツールチップ関連のUI機能をまとめたモジュール

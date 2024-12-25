@@ -1,6 +1,6 @@
 // src/eventHandlers/uiEventHandlers.js
 
-import stateManager from '../../stateManager.js';
+import stateManager from '../state/index.js';
 import uiManager from '../ui/uiManager.js';
 import { showEditForm, showLineEditForm, showPolygonEditForm } from '../ui/forms.js';
 import { removeSelectedVertices } from '../map/mapInteraction.js';

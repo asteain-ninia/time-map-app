@@ -1,7 +1,7 @@
 // src/dataStore/pointsStore.js
 
 import { getPropertiesForYear } from '../utils/index.js';
-import stateManager from '../../stateManager.js';
+import stateManager from '../state/index.js';
 
 /**
  * ポイントを保持するローカル変数

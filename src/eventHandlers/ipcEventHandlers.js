@@ -1,6 +1,6 @@
 // src/eventHandlers/ipcEventHandlers.js
 
-import stateManager from '../../stateManager.js';
+import stateManager from '../state/index.js';
 import uiManager from '../ui/uiManager.js';
 import DataStore from '../dataStore/index.js';
 

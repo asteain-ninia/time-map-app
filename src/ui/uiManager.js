@@ -1,6 +1,6 @@
 // src/ui/uiManager.js
 
-import stateManager from '../../stateManager.js';
+import stateManager from '../state/index.js';
 import { showNotification } from './forms.js'; // どこからでもshowNotificationを使えるように
 import { showDetailWindow } from './forms.js';
 

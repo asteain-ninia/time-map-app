@@ -7,7 +7,7 @@
  * - 追加で "unsavedChanges" や "loadData", "getData" などの全体管理も行う
  */
 
-import stateManager from '../../stateManager.js';
+import stateManager from './../state/index.js';
 import PointsStore from './pointsStore.js';
 import LinesStore from './linesStore.js';
 import PolygonsStore from './polygonsStore.js';

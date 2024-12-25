@@ -2,7 +2,6 @@
 
 import DataStore from './src/dataStore/index.js';
 import uiManager from './src/ui/uiManager.js';
-import stateManager from './stateManager.js';
 
 import {
     loadMap,

@@ -1,6 +1,6 @@
 // src/map/mapRenderer.js
 
-import stateManager from '../../stateManager.js';
+import stateManager from '../state/index.js';
 
 import {
     vertexDragStarted,
