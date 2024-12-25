@@ -1,6 +1,6 @@
 // src/ui/forms.js
 
-import { getPropertiesForYear } from '../../utils.js';
+import { getPropertiesForYear } from '../utils/index.js';
 import stateManager from '../../stateManager.js';
 import DataStore from '../dataStore/index.js';
 

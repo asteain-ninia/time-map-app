@@ -1,6 +1,6 @@
 // src/dataStore/polygonsStore.js
 
-import { getPropertiesForYear } from '../../utils.js';
+import { getPropertiesForYear } from '../utils/index.js';
 import stateManager from '../../stateManager.js';
 
 const polygons = new Map();

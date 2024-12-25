@@ -3,7 +3,7 @@
 import stateManager from '../../stateManager.js';
 import DataStore from '../dataStore/index.js';
 import tooltips from '../ui/tooltips.js';
-import { getPropertiesForYear } from '../../utils.js';
+import { getPropertiesForYear } from '../utils/index.js';
 
 let renderDataCallback;
 let disableMapZoomCallback;

@@ -1,6 +1,6 @@
 // src/dataStore/linesStore.js
 
-import { getPropertiesForYear } from '../../utils.js';
+import { getPropertiesForYear } from '../utils/index.js';
 import stateManager from '../../stateManager.js';
 
 const lines = new Map();
