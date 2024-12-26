@@ -1,15 +1,13 @@
 // src/dataStore/pointsStore.js
 
 import { getPropertiesForYear } from '../utils/index.js';
-import stateManager from '../state/index.js';
+import { debugLog } from '../utils/logger.js';
+import { showNotification } from '../ui/forms.js';
 
-/**
- * ポイントを保持するローカル変数
- */
 const points = new Map();
 
 /**
- * ポイントに関する操作をまとめたモジュール
+ * 点情報に関する操作をまとめたモジュール
  */
 const PointsStore = {
     /**
@@ -19,22 +17,13 @@ const PointsStore = {
      */
     getPoints(year) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PointsStore.getPoints() が呼び出されました。年:', year);
-            }
-
+            debugLog(4, '点情報を年に応じて取得します。');
             return Array.from(points.values())
                 .map(point => {
-                    if (stateManager.getState().debugMode) {
-                        console.log('処理中のポイント:', point);
-                    }
-
                     let properties = null;
-
                     if (point.properties && Array.isArray(point.properties)) {
                         properties = getPropertiesForYear(point.properties, year);
                     } else {
-                        // 従来の year, name, description が直接付与されている場合
                         if (point.year !== undefined) {
                             properties = {
                                 year: point.year,
@@ -44,13 +33,11 @@ const PointsStore = {
                         } else {
                             properties = {
                                 year: 0,
-                                name: point.name || '不明なポイント',
+                                name: point.name || '不明な点情報',
                                 description: point.description || '',
                             };
                         }
                     }
-
-                    // points配列がなければ x, y を配列に変換
                     if (!point.points || !Array.isArray(point.points) || point.points.length === 0) {
                         if (point.x !== undefined && point.y !== undefined) {
                             point.points = [{ x: point.x, y: point.y }];
@@ -58,7 +45,6 @@ const PointsStore = {
                             point.points = [{ x: 0, y: 0 }];
                         }
                     }
-
                     if (properties) {
                         return {
                             id: point.id,
@@ -73,7 +59,8 @@ const PointsStore = {
                 })
                 .filter(p => p !== null);
         } catch (error) {
-            console.error('PointsStore.getPoints 関数内でエラー:', error);
+            console.error('PointsStore.getPoints エラー:', error);
+            showNotification('点情報の取得中にエラーが発生しました。', 'error');
             return [];
         }
     },
@@ -83,12 +70,11 @@ const PointsStore = {
      */
     getAllPoints() {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PointsStore.getAllPoints() が呼び出されました。');
-            }
+            debugLog(4, 'すべての点情報を取得します。');
             return Array.from(points.values());
         } catch (error) {
-            console.error('PointsStore.getAllPoints 関数内でエラー:', error);
+            console.error('PointsStore.getAllPoints エラー:', error);
+            showNotification('点情報の一覧取得中にエラーが発生しました。', 'error');
             return [];
         }
     },
@@ -99,16 +85,10 @@ const PointsStore = {
      */
     addPoint(point) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PointsStore.addPoint() が呼び出されました。ID:', point.id);
-                console.log('追加されるポイント:', point);
-            }
-
+            debugLog(3, '点情報を追加します。');
             if (!point.properties || !Array.isArray(point.properties)) {
                 point.properties = [];
             }
-
-            // points配列がなければ作る
             if (!point.points || !Array.isArray(point.points) || point.points.length === 0) {
                 if (point.x !== undefined && point.y !== undefined) {
                     point.points = [{ x: point.x, y: point.y }];
@@ -118,10 +98,10 @@ const PointsStore = {
                     point.points = [{ x: 0, y: 0 }];
                 }
             }
-
             points.set(point.id, point);
         } catch (error) {
             console.error('PointsStore.addPoint エラー:', error);
+            showNotification('点情報の追加中にエラーが発生しました。', 'error');
         }
     },
 
@@ -131,9 +111,7 @@ const PointsStore = {
      */
     updatePoint(updatedPoint) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PointsStore.updatePoint() ポイントID:', updatedPoint.id);
-            }
+            debugLog(4, '点情報を更新します。');
             if (points.has(updatedPoint.id)) {
                 if (!updatedPoint.points || !Array.isArray(updatedPoint.points) || updatedPoint.points.length === 0) {
                     if (updatedPoint.x !== undefined && updatedPoint.y !== undefined) {
@@ -146,10 +124,11 @@ const PointsStore = {
                 }
                 points.set(updatedPoint.id, updatedPoint);
             } else {
-                console.warn('更新対象のポイントが見つかりません。ID:', updatedPoint.id);
+                console.warn('更新対象の点情報が見つかりません。ID:', updatedPoint.id);
             }
         } catch (error) {
             console.error('PointsStore.updatePoint エラー:', error);
+            showNotification('点情報の更新中にエラーが発生しました。', 'error');
         }
     },
 
@@ -159,18 +138,14 @@ const PointsStore = {
      */
     removePoint(id) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PointsStore.removePoint() ID:', id);
-            }
+            debugLog(3, '点情報を削除します。');
             points.delete(id);
         } catch (error) {
             console.error('PointsStore.removePoint エラー:', error);
+            showNotification('点情報の削除中にエラーが発生しました。', 'error');
         }
     },
 
-    /**
-     * 全ポイントをクリア
-     */
     clear() {
         points.clear();
     }

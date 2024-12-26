@@ -2,20 +2,17 @@
 
 import { getPropertiesForYear } from '../utils/index.js';
 import stateManager from '../state/index.js';
+import { debugLog } from '../utils/logger.js';
+import { showNotification } from '../ui/forms.js';
 
 const polygons = new Map();
 
 const PolygonsStore = {
     getPolygons(year) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PolygonsStore.getPolygons() 年:', year);
-            }
-
+            debugLog(4, '面情報を年に応じて取得します。');
             return Array.from(polygons.values())
                 .map(polygon => {
-                    console.log('処理中のポリゴン:', polygon);
-
                     let properties = null;
                     if (polygon.properties && Array.isArray(polygon.properties)) {
                         properties = getPropertiesForYear(polygon.properties, year);
@@ -29,14 +26,11 @@ const PolygonsStore = {
                         } else {
                             properties = {
                                 year: 0,
-                                name: polygon.name || '不明なポリゴン',
+                                name: polygon.name || '不明な面情報',
                                 description: polygon.description || '',
                             };
                         }
                     }
-
-                    console.log('取得されたプロパティ:', properties);
-
                     if (properties) {
                         return {
                             id: polygon.id,
@@ -52,56 +46,53 @@ const PolygonsStore = {
                 .filter(pg => pg !== null);
         } catch (error) {
             console.error('PolygonsStore.getPolygons エラー:', error);
+            showNotification('面情報の取得中にエラーが発生しました。', 'error');
             return [];
         }
     },
 
     getAllPolygons() {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PolygonsStore.getAllPolygons() が呼び出されました。');
-            }
+            debugLog(4, 'すべての面情報を取得します。');
             return Array.from(polygons.values());
         } catch (error) {
             console.error('PolygonsStore.getAllPolygons エラー:', error);
+            showNotification('面情報の一覧取得中にエラーが発生しました。', 'error');
             return [];
         }
     },
 
     addPolygon(polygon) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PolygonsStore.addPolygon() ポリゴンID:', polygon.id);
-            }
+            debugLog(3, '面情報を追加します。');
             polygons.set(polygon.id, polygon);
         } catch (error) {
             console.error('PolygonsStore.addPolygon エラー:', error);
+            showNotification('面情報の追加中にエラーが発生しました。', 'error');
         }
     },
 
     updatePolygon(updatedPolygon) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PolygonsStore.updatePolygon() ポリゴンID:', updatedPolygon.id);
-            }
+            debugLog(4, '面情報を更新します。');
             if (polygons.has(updatedPolygon.id)) {
                 polygons.set(updatedPolygon.id, updatedPolygon);
             } else {
-                console.warn('更新対象のポリゴンが見つかりません。ID:', updatedPolygon.id);
+                console.warn('更新対象の面情報が見つかりません。ID:', updatedPolygon.id);
             }
         } catch (error) {
             console.error('PolygonsStore.updatePolygon エラー:', error);
+            showNotification('面情報の更新中にエラーが発生しました。', 'error');
         }
     },
 
     removePolygon(id) {
         try {
-            if (stateManager.getState().debugMode) {
-                console.info('PolygonsStore.removePolygon() ID:', id);
-            }
+            debugLog(3, '面情報を削除します。');
             polygons.delete(id);
         } catch (error) {
             console.error('PolygonsStore.removePolygon エラー:', error);
+            showNotification('面情報の削除中にエラーが発生しました。', 'error');
         }
     },
 

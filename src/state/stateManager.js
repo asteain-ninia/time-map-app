@@ -58,6 +58,4 @@ export {
     getState,
     setState,
     subscribe,
-    // 必要であれば state や listeners を直接exportすることもできるが推奨はしない
 };
-

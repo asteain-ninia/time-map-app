@@ -1,8 +1,8 @@
 // src/ui/uiManager.js
 
 import stateManager from '../state/index.js';
-import { showNotification } from './forms.js'; // どこからでもshowNotificationを使えるように
-import { showDetailWindow } from './forms.js';
+import { showNotification, showDetailWindow } from './forms.js';
+import { debugLog } from '../utils/logger.js';
 
 /**
  * UI全体を管理するメインモジュール
@@ -15,10 +15,7 @@ import { showDetailWindow } from './forms.js';
 function updateUI() {
     try {
         const state = stateManager.getState();
-
-        if (state.debugMode) {
-            console.info('updateUI() が呼び出されました。');
-        }
+        debugLog(3, 'UI全体の更新を開始します。');
 
         document.getElementById('addModeButton').textContent =
             `追加モード: ${state.isAddMode ? 'ON' : 'OFF'}`;
@@ -78,7 +75,7 @@ function updateUI() {
         updateSlider();
         updateWorldInfo();
     } catch (error) {
-        console.error('updateUI 関数内でエラーが発生しました:', error);
+        console.error('updateUI 関数内でエラー:', error);
         showNotification('UIの更新中にエラーが発生しました。', 'error');
     }
 }
@@ -88,16 +85,13 @@ function updateUI() {
  */
 function hideAllForms() {
     try {
-        if (stateManager.getState().debugMode) {
-            console.info('hideAllForms() が呼び出されました。');
-        }
-
+        debugLog(3, 'すべてのフォームを非表示にします。');
         document.getElementById('editForm').style.display = 'none';
         document.getElementById('lineEditForm').style.display = 'none';
         document.getElementById('polygonEditForm').style.display = 'none';
         document.getElementById('detailWindow').style.display = 'none';
     } catch (error) {
-        console.error('hideAllForms 関数内でエラーが発生しました:', error);
+        console.error('hideAllForms 関数内でエラー:', error);
     }
 }
 
@@ -107,10 +101,7 @@ function hideAllForms() {
  */
 function updateEventList(DataStore) {
     try {
-        if (stateManager.getState().debugMode) {
-            console.info('updateEventList() が呼び出されました。');
-        }
-
+        debugLog(3, 'イベント一覧の更新を開始します。');
         const eventList = document.getElementById('eventList');
         eventList.innerHTML = '';
 
@@ -124,15 +115,13 @@ function updateEventList(DataStore) {
         const events = [];
 
         points.forEach(point => {
-            events.push({ type: 'ポイント', data: point });
+            events.push({ type: '点情報', data: point });
         });
-
         lines.forEach(line => {
-            events.push({ type: 'ライン', data: line });
+            events.push({ type: '線情報', data: line });
         });
-
         polygons.forEach(polygon => {
-            events.push({ type: 'ポリゴン', data: polygon });
+            events.push({ type: '面情報', data: polygon });
         });
 
         events.sort((a, b) => a.data.year - b.data.year);
@@ -146,7 +135,7 @@ function updateEventList(DataStore) {
             eventList.appendChild(li);
         });
     } catch (error) {
-        console.error('updateEventList 関数内でエラーが発生しました:', error);
+        console.error('updateEventList 関数内でエラー:', error);
     }
 }
 
@@ -155,6 +144,7 @@ function updateEventList(DataStore) {
  */
 function updateSlider() {
     try {
+        debugLog(4, 'スライダーの表示を更新します。');
         const state = stateManager.getState();
         const timeSlider = document.getElementById('timeSlider');
 
@@ -164,7 +154,7 @@ function updateSlider() {
 
         document.getElementById('currentYear').textContent = `年: ${state.currentYear}`;
     } catch (error) {
-        console.error('updateSlider 関数内でエラーが発生しました:', error);
+        console.error('updateSlider 関数内でエラー:', error);
     }
 }
 
@@ -173,12 +163,13 @@ function updateSlider() {
  */
 function updateWorldInfo() {
     try {
+        debugLog(4, '世界情報の表示を更新します。');
         const state = stateManager.getState();
 
         document.getElementById('worldNameDisplay').textContent = state.worldName || '無名の世界';
         document.getElementById('worldDescriptionDisplay').textContent = state.worldDescription || '説明がありません。';
     } catch (error) {
-        console.error('updateWorldInfo 関数内でエラーが発生しました:', error);
+        console.error('updateWorldInfo 関数内でエラー:', error);
     }
 }
 
@@ -187,6 +178,7 @@ function updateWorldInfo() {
  */
 function populateSettings() {
     try {
+        debugLog(4, '設定ダイアログを初期化します。');
         const state = stateManager.getState();
 
         document.getElementById('sliderMin').value = state.sliderMin;
@@ -194,7 +186,7 @@ function populateSettings() {
         document.getElementById('worldName').value = state.worldName;
         document.getElementById('worldDescription').value = state.worldDescription;
     } catch (error) {
-        console.error('populateSettings 関数内でエラーが発生しました:', error);
+        console.error('populateSettings 関数内でエラー:', error);
     }
 }
 
@@ -206,4 +198,4 @@ export default {
     updateWorldInfo,
     populateSettings,
     showNotification,
-}
+};

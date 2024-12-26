@@ -1,76 +1,75 @@
 // src/dataStore/index.js
 
-/**
- * ここで PointsStore / LinesStore / PolygonsStore をまとめ、
- * 従来の "DataStore" として扱う。
- *
- * - 追加で "unsavedChanges" や "loadData", "getData" などの全体管理も行う
- */
-
 import stateManager from './../state/index.js';
 import PointsStore from './pointsStore.js';
 import LinesStore from './linesStore.js';
 import PolygonsStore from './polygonsStore.js';
-
-let unsavedChanges = false;
+import { debugLog } from '../utils/logger.js';
+import uiManager from '../ui/uiManager.js';
 
 /**
  * DataStore 全体を統括するモジュール
+ * 点情報・線情報・面情報の管理機能をまとめる
  */
+let unsavedChanges = false;
+
 const DataStore = {
-    // ポイント関連
     getPoints: (year) => PointsStore.getPoints(year),
     getAllPoints: () => PointsStore.getAllPoints(),
     addPoint: (p) => {
+        debugLog(3, '点情報を追加します。');
         PointsStore.addPoint(p);
         unsavedChanges = true;
     },
     updatePoint: (p) => {
+        debugLog(4, '点情報を更新します。');
         PointsStore.updatePoint(p);
         unsavedChanges = true;
     },
     removePoint: (id) => {
+        debugLog(3, '点情報を削除します。');
         PointsStore.removePoint(id);
         unsavedChanges = true;
     },
 
-    // ライン関連
     getLines: (year) => LinesStore.getLines(year),
     getAllLines: () => LinesStore.getAllLines(),
     addLine: (l) => {
+        debugLog(3, '線情報を追加します。');
         LinesStore.addLine(l);
         unsavedChanges = true;
     },
     updateLine: (l) => {
+        debugLog(4, '線情報を更新します。');
         LinesStore.updateLine(l);
         unsavedChanges = true;
     },
     removeLine: (id) => {
+        debugLog(3, '線情報を削除します。');
         LinesStore.removeLine(id);
         unsavedChanges = true;
     },
 
-    // ポリゴン関連
     getPolygons: (year) => PolygonsStore.getPolygons(year),
     getAllPolygons: () => PolygonsStore.getAllPolygons(),
     addPolygon: (pg) => {
+        debugLog(3, '面情報を追加します。');
         PolygonsStore.addPolygon(pg);
         unsavedChanges = true;
     },
     updatePolygon: (pg) => {
+        debugLog(4, '面情報を更新します。');
         PolygonsStore.updatePolygon(pg);
         unsavedChanges = true;
     },
     removePolygon: (id) => {
+        debugLog(3, '面情報を削除します。');
         PolygonsStore.removePolygon(id);
         unsavedChanges = true;
     },
 
-    // データ全消去
     clearData() {
-        if (stateManager.getState().debugMode) {
-            console.info('DataStore.clearData() が呼び出されました。');
-        }
+        debugLog(2, 'データを全消去します。');
         PointsStore.clear();
         LinesStore.clear();
         PolygonsStore.clear();
@@ -90,13 +89,13 @@ const DataStore = {
      */
     loadData(data) {
         try {
+            debugLog(2, '外部ファイルからデータをロードします。');
             PointsStore.clear();
             LinesStore.clear();
             PolygonsStore.clear();
 
             if (data.points) {
                 data.points.forEach((point) => {
-                    // x,y を points配列に変換するロジックは addPoint 内で実施
                     this.addPoint(point);
                 });
             }
@@ -110,10 +109,10 @@ const DataStore = {
                     this.addPolygon(polygon);
                 });
             }
-
             unsavedChanges = false;
         } catch (error) {
             console.error('DataStore.loadData エラー:', error);
+            uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
         }
     },
 
@@ -123,6 +122,7 @@ const DataStore = {
      */
     getData() {
         try {
+            debugLog(2, '全データを取得し、JSON形式で返します。');
             const state = stateManager.getState();
             return {
                 points: this.getAllPoints(),
@@ -137,6 +137,7 @@ const DataStore = {
             };
         } catch (error) {
             console.error('DataStore.getData エラー:', error);
+            uiManager.showNotification('全データの取得中にエラーが発生しました。', 'error');
             return null;
         }
     },

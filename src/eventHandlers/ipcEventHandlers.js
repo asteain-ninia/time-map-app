@@ -3,6 +3,8 @@
 import stateManager from '../state/index.js';
 import uiManager from '../ui/uiManager.js';
 import DataStore from '../dataStore/index.js';
+import { debugLog } from '../utils/logger.js';
+import { showNotification } from '../ui/forms.js';
 
 /**
  * IPC通信関連のイベントリスナーを設定する
@@ -17,24 +19,22 @@ export function setupIPCEventListeners(ipc, renderData) {
         state = newState;
     });
 
-    // 「保存」ボタン
+    debugLog(3, 'IPCイベントリスナーをセットアップします。');
+
     document.getElementById('saveButton').addEventListener('click', () => {
         try {
+            debugLog(2, '保存ボタンが押されました。');
             const dataToSave = DataStore.getData();
             ipc.send('save-data', dataToSave);
-
-            if (state.debugMode) {
-                console.info('データの保存が開始されました。');
-            }
         } catch (error) {
             console.error('saveButton のクリックイベントでエラー:', error);
-            uiManager.showNotification('データの保存中にエラーが発生しました。', 'error');
+            showNotification('データの保存中にエラーが発生しました。', 'error');
         }
     });
 
-    // 「読み込み」ボタン
     document.getElementById('loadButton').addEventListener('click', () => {
         try {
+            debugLog(2, '読み込みボタンが押されました。');
             if (DataStore.hasUnsavedChanges()) {
                 ipc.invoke('show-confirm-dialog', {
                     title: 'データの読み込み',
@@ -45,41 +45,34 @@ export function setupIPCEventListeners(ipc, renderData) {
                     }
                 }).catch((error) => {
                     console.error('確認ダイアログの表示中にエラー:', error);
-                    uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+                    showNotification('データの読み込み中にエラーが発生しました。', 'error');
                 });
             } else {
                 ipc.send('load-data');
             }
         } catch (error) {
             console.error('loadButton のクリックイベントでエラー:', error);
-            uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+            showNotification('データの読み込み中にエラーが発生しました。', 'error');
         }
     });
 
-    // IPC: 保存結果
     ipc.on('save-data-reply', (success) => {
         try {
             if (success) {
                 DataStore.resetUnsavedChanges();
                 uiManager.showNotification('データが正常に保存されました。', 'info');
-
-                if (state.debugMode) {
-                    console.info('データの保存が完了しました。');
-                }
             } else {
                 uiManager.showNotification('データの保存中にエラーが発生しました。', 'error');
             }
         } catch (error) {
             console.error('save-data-reply イベントでエラー:', error);
-            uiManager.showNotification('データの保存中にエラーが発生しました。', 'error');
+            showNotification('データの保存完了処理中にエラーが発生しました。', 'error');
         }
     });
 
-    // IPC: 読み込み結果
     ipc.on('load-data-reply', (data) => {
         try {
             if (data) {
-                // もしIDがないオブジェクトがあれば、仮IDを付与
                 if (data.points) {
                     data.points.forEach(p => { if (!p.id) p.id = Date.now() + Math.random(); });
                 }
@@ -118,8 +111,7 @@ export function setupIPCEventListeners(ipc, renderData) {
             }
         } catch (error) {
             console.error('load-data-reply イベントでエラー:', error);
-            uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
+            showNotification('データの読み込み中にエラーが発生しました。', 'error');
         }
     });
 }
-

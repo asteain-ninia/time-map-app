@@ -20,16 +20,15 @@
     <div class="center-buttons">
       <div id="tools" style="display: none;">
         <button id="selectTool">選択</button>
-        <button id="pointTool">ポイント追加</button>
-        <button id="lineTool">ライン追加</button>
-        <button id="polygonTool">ポリゴン追加</button>
-        <!-- 新しい編集ツールを追加 -->
-        <button id="pointAttributeEditTool">ポイント属性編集</button>
-        <button id="pointMoveTool">ポイント移動</button>
-        <button id="lineAttributeEditTool">ライン属性編集</button>
-        <button id="lineVertexEditTool">ライン頂点編集</button>
-        <button id="polygonAttributeEditTool">ポリゴン属性編集</button>
-        <button id="polygonVertexEditTool">ポリゴン頂点編集</button>
+        <button id="pointTool">点情報追加</button>
+        <button id="lineTool">線情報追加</button>
+        <button id="polygonTool">面情報追加</button>
+        <button id="pointAttributeEditTool">点情報属性編集</button>
+        <button id="pointMoveTool">点情報移動</button>
+        <button id="lineAttributeEditTool">線情報属性編集</button>
+        <button id="lineVertexEditTool">線情報頂点編集</button>
+        <button id="polygonAttributeEditTool">面情報属性編集</button>
+        <button id="polygonVertexEditTool">面情報頂点編集</button>
       </div>
       <div id="drawControls" style="display: none;">
         <button id="confirmDrawButton">確定</button>
@@ -93,7 +92,7 @@
   </div>
 
   <!-- 編集フォームなど -->
-  <!-- ポイント編集フォーム -->
+  <!-- 点情報編集フォーム -->
   <div id="editForm" style="display: none;">
     <label for="pointName">名前:</label>
     <input type="text" id="pointName"><br>
@@ -106,7 +105,7 @@
     <button id="deletePointButton">削除</button>
   </div>
 
-  <!-- ライン編集フォーム -->
+  <!-- 線情報編集フォーム -->
   <div id="lineEditForm" style="display: none;">
     <label for="lineName">名前:</label>
     <input type="text" id="lineName"><br>
@@ -119,7 +118,7 @@
     <button id="deleteLineButton">削除</button>
   </div>
 
-  <!-- ポリゴン編集フォーム -->
+  <!-- 面情報編集フォーム -->
   <div id="polygonEditForm" style="display: none;">
     <label for="polygonName">名前:</label>
     <input type="text" id="polygonName"><br>

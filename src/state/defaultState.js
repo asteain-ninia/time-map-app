@@ -5,15 +5,15 @@
  * 必要に応じてキーを追加・変更してください
  */
 export const defaultState = {
-    isAddMode: false,             // 追加: 追加モードかどうか
-    isEditMode: false,            // 追加: 編集モードかどうか
+    isAddMode: false,             // 追加モードかどうか
+    isEditMode: false,            // 編集モードかどうか
     currentTool: 'select',
     isDrawing: false,
     tempPoint: null,
     tempLinePoints: [],
     tempPolygonPoints: [],
     currentYear: 0,
-    debugMode: true,
+    debugLevel: 4, // 0=出力なし, 1=エラーのみ, 2=警告+エラー, 3=情報+警告+エラー, 4=詳細
     sliderMin: 0,                 // スライダーの最小値
     sliderMax: 10000,             // スライダーの最大値
     worldName: '',                // 世界の名前
