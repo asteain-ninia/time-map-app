@@ -10,14 +10,15 @@ const points = new Map();
  * 点情報に関する操作をまとめたモジュール
  */
 const PointsStore = {
+
     /**
      * 指定年に表示すべきポイント一覧を取得
-     * @param {number} year 
+     * @param {number} year
      * @returns {Array} 年がyear以下のポイントのみ返す
      */
     getPoints(year) {
+        debugLog(4, `PointsStore.getPoints() が呼び出されました。year=${year}`);
         try {
-            debugLog(4, '点情報を年に応じて取得します。');
             return Array.from(points.values())
                 .map(point => {
                     let properties = null;
@@ -59,7 +60,7 @@ const PointsStore = {
                 })
                 .filter(p => p !== null);
         } catch (error) {
-            console.error('PointsStore.getPoints エラー:', error);
+            debugLog(1, `PointsStore.getPoints() でエラー発生: ${error}`);
             showNotification('点情報の取得中にエラーが発生しました。', 'error');
             return [];
         }
@@ -69,11 +70,11 @@ const PointsStore = {
      * すべてのポイント(年を考慮せず)を取得
      */
     getAllPoints() {
+        debugLog(4, `PointsStore.getAllPoints() が呼び出されました。`);
         try {
-            debugLog(4, 'すべての点情報を取得します。');
             return Array.from(points.values());
         } catch (error) {
-            console.error('PointsStore.getAllPoints エラー:', error);
+            debugLog(1, `PointsStore.getAllPoints() でエラー発生: ${error}`);
             showNotification('点情報の一覧取得中にエラーが発生しました。', 'error');
             return [];
         }
@@ -81,11 +82,11 @@ const PointsStore = {
 
     /**
      * ポイントを追加
-     * @param {Object} point 
+     * @param {Object} point
      */
     addPoint(point) {
+        debugLog(4, `PointsStore.addPoint() が呼び出されました。point.id=${point?.id}`);
         try {
-            debugLog(3, '点情報を追加します。');
             if (!point.properties || !Array.isArray(point.properties)) {
                 point.properties = [];
             }
@@ -100,18 +101,18 @@ const PointsStore = {
             }
             points.set(point.id, point);
         } catch (error) {
-            console.error('PointsStore.addPoint エラー:', error);
+            debugLog(1, `PointsStore.addPoint() でエラー発生: ${error}`);
             showNotification('点情報の追加中にエラーが発生しました。', 'error');
         }
     },
 
     /**
      * ポイントを更新
-     * @param {Object} updatedPoint 
+     * @param {Object} updatedPoint
      */
     updatePoint(updatedPoint) {
+        debugLog(4, `PointsStore.updatePoint() が呼び出されました。updatedPoint.id=${updatedPoint?.id}`);
         try {
-            debugLog(4, '点情報を更新します。');
             if (points.has(updatedPoint.id)) {
                 if (!updatedPoint.points || !Array.isArray(updatedPoint.points) || updatedPoint.points.length === 0) {
                     if (updatedPoint.x !== undefined && updatedPoint.y !== undefined) {
@@ -124,29 +125,31 @@ const PointsStore = {
                 }
                 points.set(updatedPoint.id, updatedPoint);
             } else {
+                debugLog(3, `PointsStore.updatePoint() - 更新対象の点情報が見つかりません。ID: ${updatedPoint?.id}`);
                 console.warn('更新対象の点情報が見つかりません。ID:', updatedPoint.id);
             }
         } catch (error) {
-            console.error('PointsStore.updatePoint エラー:', error);
+            debugLog(1, `PointsStore.updatePoint() でエラー発生: ${error}`);
             showNotification('点情報の更新中にエラーが発生しました。', 'error');
         }
     },
 
     /**
      * ポイントを削除
-     * @param {number|string} id 
+     * @param {number|string} id
      */
     removePoint(id) {
+        debugLog(4, `PointsStore.removePoint() が呼び出されました。id=${id}`);
         try {
-            debugLog(3, '点情報を削除します。');
             points.delete(id);
         } catch (error) {
-            console.error('PointsStore.removePoint エラー:', error);
+            debugLog(1, `PointsStore.removePoint() でエラー発生: ${error}`);
             showNotification('点情報の削除中にエラーが発生しました。', 'error');
         }
     },
 
     clear() {
+        debugLog(3, 'PointsStore.clear() が呼び出されました。');
         points.clear();
     }
 };

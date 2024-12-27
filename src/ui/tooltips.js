@@ -1,12 +1,8 @@
 // src/ui/tooltips.js
 
-import stateManager from '../state/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from './forms.js';
 
-/**
- * ツールチップ関連のUI機能をまとめたモジュール
- */
 const tooltip = d3.select('#tooltip');
 
 /**
@@ -15,12 +11,12 @@ const tooltip = d3.select('#tooltip');
  * @param {Object} d - フィーチャーデータ（名前や年などを持つ）
  */
 function showTooltip(event, d) {
+    debugLog(4, 'showTooltip() が呼び出されました。');
     try {
-        debugLog(4, 'ツールチップを表示します。');
         tooltip.style('display', 'block')
             .html(`名前: ${d.name}<br>年: ${d.year !== undefined ? d.year : '不明'}`);
     } catch (error) {
-        console.error('showTooltip 関数内でエラー:', error);
+        debugLog(1, `showTooltip() でエラー発生: ${error}`);
         showNotification('ツールチップ表示中にエラーが発生しました。', 'error');
     }
 }
@@ -30,12 +26,12 @@ function showTooltip(event, d) {
  * @param {Event} event - マウスイベント
  */
 function moveTooltip(event) {
+    debugLog(4, 'moveTooltip() が呼び出されました。');
     try {
-        debugLog(4, 'ツールチップの位置を移動します。');
         tooltip.style('left', (event.pageX + 10) + 'px')
             .style('top', (event.pageY + 10) + 'px');
     } catch (error) {
-        console.error('moveTooltip 関数内でエラー:', error);
+        debugLog(1, `moveTooltip() でエラー発生: ${error}`);
         showNotification('ツールチップ移動中にエラーが発生しました。', 'error');
     }
 }
@@ -44,11 +40,11 @@ function moveTooltip(event) {
  * ツールチップを非表示にする
  */
 function hideTooltip() {
+    debugLog(4, 'hideTooltip() が呼び出されました。');
     try {
-        debugLog(4, 'ツールチップを非表示にします。');
         tooltip.style('display', 'none');
     } catch (error) {
-        console.error('hideTooltip 関数内でエラー:', error);
+        debugLog(1, `hideTooltip() でエラー発生: ${error}`);
         showNotification('ツールチップ非表示中にエラーが発生しました。', 'error');
     }
 }

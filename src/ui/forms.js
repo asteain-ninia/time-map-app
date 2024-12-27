@@ -5,6 +5,7 @@ import stateManager from '../state/index.js';
 import DataStore from '../dataStore/index.js';
 
 import uiManager from './uiManager.js';
+import { debugLog } from '../utils/logger.js';
 
 /**
  * ポイント編集フォームを表示
@@ -14,24 +15,23 @@ import uiManager from './uiManager.js';
  * @param {Number} [y] - クリック座標(pageY)
  */
 function showEditForm(point, renderData, x, y) {
+    debugLog(4, 'showEditForm() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
             console.info('showEditForm() が呼び出されました。');
         }
 
-        // 他フォームを全部閉じる（以前に開いたフォームや詳細ウィンドウを消す）
+        // 他フォームを全部閉じる
         uiManager.hideAllForms();
 
         const form = document.getElementById('editForm');
         form.style.display = 'block';
         form.style.position = 'absolute';
 
-        // クリック位置があれば、その付近に配置
         if (typeof x === 'number' && typeof y === 'number') {
             form.style.left = (x + 10) + 'px';
             form.style.top = (y + 10) + 'px';
         } else {
-            // クリック位置がなければ適当なデフォルト
             form.style.left = '200px';
             form.style.top = '150px';
         }
@@ -58,6 +58,7 @@ function showEditForm(point, renderData, x, y) {
         }
 
         document.getElementById('savePointButton').onclick = () => {
+            debugLog(4, 'savePointButton クリックイベントが発生しました。');
             try {
                 const name = document.getElementById('pointName').value;
                 const description = document.getElementById('pointDescription').value;
@@ -65,7 +66,7 @@ function showEditForm(point, renderData, x, y) {
                 const year = yearInputValue !== '' ? parseInt(yearInputValue, 10) : undefined;
 
                 if (year === undefined || isNaN(year)) {
-                    showNotification('年を正しく入力してください。', 'error');
+                    uiManager.showNotification('年を正しく入力してください。', 'error');
                     return;
                 }
 
@@ -112,22 +113,24 @@ function showEditForm(point, renderData, x, y) {
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
-                console.error('savePointButton のクリックでエラー:', error);
-                showNotification('ポイントの保存中にエラーが発生しました。', 'error');
+                debugLog(1, `savePointButton のクリック時にエラー: ${error}`);
+                uiManager.showNotification('ポイントの保存中にエラーが発生しました。', 'error');
             }
         };
 
         document.getElementById('cancelEditButton').onclick = () => {
+            debugLog(4, 'cancelEditButton クリックイベントが発生しました。');
             try {
                 form.style.display = 'none';
                 stateManager.setState({ isDrawing: false, tempPoint: null });
                 renderData();
             } catch (error) {
-                console.error('cancelEditButton のクリックでエラー:', error);
+                debugLog(1, `cancelEditButton のクリック時にエラー: ${error}`);
             }
         };
 
         document.getElementById('deletePointButton').onclick = () => {
+            debugLog(4, 'deletePointButton クリックイベントが発生しました。');
             try {
                 if (point) {
                     DataStore.removePoint(point.id);
@@ -136,12 +139,13 @@ function showEditForm(point, renderData, x, y) {
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
-                console.error('deletePointButton のクリックでエラー:', error);
-                showNotification('ポイントの削除中にエラーが発生しました。', 'error');
+                debugLog(1, `deletePointButton のクリック時にエラー: ${error}`);
+                uiManager.showNotification('ポイントの削除中にエラーが発生しました。', 'error');
             }
         };
+
     } catch (error) {
-        console.error('showEditForm 関数内エラー:', error);
+        debugLog(1, `showEditForm() でエラー発生: ${error}`);
     }
 }
 
@@ -149,19 +153,18 @@ function showEditForm(point, renderData, x, y) {
  * ライン編集フォーム
  */
 function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton = false, x, y) {
+    debugLog(4, 'showLineEditForm() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
             console.info('showLineEditForm() が呼び出されました。');
         }
 
-        // すべてのフォームを閉じる
         uiManager.hideAllForms();
 
         const form = document.getElementById('lineEditForm');
         form.style.display = 'block';
         form.style.position = 'absolute';
 
-        // クリック座標があればその付近に表示
         if (typeof x === 'number' && typeof y === 'number') {
             form.style.left = (x + 10) + 'px';
             form.style.top = (y + 10) + 'px';
@@ -191,6 +194,7 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
         }
 
         document.getElementById('saveLineButton').onclick = () => {
+            debugLog(4, 'saveLineButton クリックイベントが発生しました。');
             try {
                 const name = document.getElementById('lineName').value;
                 const description = document.getElementById('lineDescription').value;
@@ -198,7 +202,7 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                 const year = parseInt(yearValue, 10);
 
                 if (isNaN(year)) {
-                    showNotification('年を正しく入力してください。', 'error');
+                    uiManager.showNotification('年を正しく入力してください。', 'error');
                     return;
                 }
 
@@ -222,12 +226,13 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
-                console.error('saveLineButton のクリックでエラー:', error);
-                showNotification('ラインの保存中にエラーが発生しました。', 'error');
+                debugLog(1, `saveLineButton のクリック時にエラー: ${error}`);
+                uiManager.showNotification('ラインの保存中にエラーが発生しました。', 'error');
             }
         };
 
         document.getElementById('cancelLineEditButton').onclick = () => {
+            debugLog(4, 'cancelLineEditButton クリックイベントが発生しました。');
             try {
                 form.style.display = 'none';
                 stateManager.setState({
@@ -240,13 +245,14 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                 }
                 renderData();
             } catch (error) {
-                console.error('cancelLineEditButton のクリックでエラー:', error);
+                debugLog(1, `cancelLineEditButton のクリック時にエラー: ${error}`);
             }
         };
 
         const deleteButton = document.getElementById('deleteLineButton');
         deleteButton.style.display = showDeleteButton ? 'inline-block' : 'none';
         deleteButton.onclick = () => {
+            debugLog(4, 'deleteLineButton クリックイベントが発生しました。');
             try {
                 DataStore.removeLine(line.id);
                 stateManager.setState({
@@ -256,12 +262,13 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
-                console.error('deleteLineButton のクリックでエラー:', error);
-                showNotification('ラインの削除中にエラーが発生しました。', 'error');
+                debugLog(1, `deleteLineButton のクリック時にエラー: ${error}`);
+                uiManager.showNotification('ラインの削除中にエラーが発生しました。', 'error');
             }
         };
+
     } catch (error) {
-        console.error('showLineEditForm 関数内でエラー:', error);
+        debugLog(1, `showLineEditForm() でエラー発生: ${error}`);
     }
 }
 
@@ -269,12 +276,12 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
  * ポリゴン編集フォーム
  */
 function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDeleteButton = false, x, y) {
+    debugLog(4, 'showPolygonEditForm() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
             console.info('showPolygonEditForm() が呼び出されました。');
         }
 
-        // すべてのフォームを閉じる
         uiManager.hideAllForms();
 
         const form = document.getElementById('polygonEditForm');
@@ -310,6 +317,7 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
         }
 
         document.getElementById('savePolygonButton').onclick = () => {
+            debugLog(4, 'savePolygonButton クリックイベントが発生しました。');
             try {
                 const name = document.getElementById('polygonName').value;
                 const description = document.getElementById('polygonDescription').value;
@@ -317,7 +325,7 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                 const year = parseInt(yearValue, 10);
 
                 if (isNaN(year)) {
-                    showNotification('年を正しく入力してください。', 'error');
+                    uiManager.showNotification('年を正しく入力してください。', 'error');
                     return;
                 }
 
@@ -341,12 +349,13 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
-                console.error('savePolygonButton のクリックでエラー:', error);
-                showNotification('ポリゴンの保存中にエラーが発生しました。', 'error');
+                debugLog(1, `savePolygonButton のクリック時にエラー: ${error}`);
+                uiManager.showNotification('ポリゴンの保存中にエラーが発生しました。', 'error');
             }
         };
 
         document.getElementById('cancelPolygonEditButton').onclick = () => {
+            debugLog(4, 'cancelPolygonEditButton クリックイベントが発生しました。');
             try {
                 form.style.display = 'none';
                 stateManager.setState({
@@ -359,13 +368,14 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                 }
                 renderData();
             } catch (error) {
-                console.error('cancelPolygonEditButton のクリックでエラー:', error);
+                debugLog(1, `cancelPolygonEditButton のクリック時にエラー: ${error}`);
             }
         };
 
         const deleteButton = document.getElementById('deletePolygonButton');
         deleteButton.style.display = showDeleteButton ? 'inline-block' : 'none';
         deleteButton.onclick = () => {
+            debugLog(4, 'deletePolygonButton クリックイベントが発生しました。');
             try {
                 DataStore.removePolygon(polygon.id);
                 stateManager.setState({
@@ -375,12 +385,13 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
-                console.error('deletePolygonButton のクリックでエラー:', error);
-                showNotification('ポリゴンの削除中にエラーが発生しました。', 'error');
+                debugLog(1, `deletePolygonButton のクリック時にエラー: ${error}`);
+                uiManager.showNotification('ポリゴンの削除中にエラーが発生しました。', 'error');
             }
         };
+
     } catch (error) {
-        console.error('showPolygonEditForm 関数内でエラー:', error);
+        debugLog(1, `showPolygonEditForm() でエラー発生: ${error}`);
     }
 }
 
@@ -391,19 +402,18 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
  * @param {Number} [y] - クリック座標(pageY)
  */
 function showDetailWindow(data, x, y) {
+    debugLog(4, 'showDetailWindow() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
             console.info('showDetailWindow() が呼び出されました。');
         }
 
-        // すべてのフォームを閉じる
         uiManager.hideAllForms();
 
         const detailWindow = document.getElementById('detailWindow');
         detailWindow.style.display = 'block';
         detailWindow.style.position = 'absolute';
 
-        // クリック位置があればそこに表示
         if (typeof x === 'number' && typeof y === 'number') {
             detailWindow.style.left = (x + 10) + 'px';
             detailWindow.style.top = (y + 10) + 'px';
@@ -418,10 +428,11 @@ function showDetailWindow(data, x, y) {
         document.getElementById('detailDescription').textContent = data.description || '説明がありません。';
 
         document.getElementById('closeDetailButton').onclick = () => {
+            debugLog(4, 'closeDetailButton クリックイベントが発生しました。');
             detailWindow.style.display = 'none';
         };
     } catch (error) {
-        console.error('showDetailWindow 関数内でエラー:', error);
+        debugLog(1, `showDetailWindow() でエラー発生: ${error}`);
     }
 }
 
@@ -429,6 +440,7 @@ function showDetailWindow(data, x, y) {
  * 簡易通知メッセージ
  */
 function showNotification(message, type = 'info') {
+    debugLog(4, `showNotification() が呼び出されました。message=${message}, type=${type}`);
     try {
         if (stateManager.getState().debugMode) {
             console.info('showNotification() が呼び出されました:', message);
@@ -444,10 +456,10 @@ function showNotification(message, type = 'info') {
         }, 5000);
 
         if (type === 'error') {
-            console.error('エラー:', message);
+            debugLog(1, `エラー通知: ${message}`);
         }
     } catch (error) {
-        console.error('showNotification 関数内でエラー:', error);
+        debugLog(1, `showNotification() でエラー発生: ${error}`);
     }
 }
 
@@ -455,6 +467,7 @@ function showNotification(message, type = 'info') {
  * ダイアログやフォーム要素をドラッグ可能にする共通関数
  */
 function makeDraggable(element) {
+    debugLog(4, 'makeDraggable() が呼び出されました。');
     try {
         let isDragging = false;
         let startX = 0;
@@ -485,7 +498,7 @@ function makeDraggable(element) {
 
                 e.preventDefault();
             } catch (error) {
-                console.error('makeDraggable mousedownエラー:', error);
+                debugLog(1, `makeDraggable mousedown中にエラー発生: ${error}`);
             }
         });
 
@@ -499,22 +512,22 @@ function makeDraggable(element) {
                     element.style.top = newTop + 'px';
                 }
             } catch (error) {
-                console.error('makeDraggable mousemoveエラー:', error);
+                debugLog(1, `makeDraggable mousemove中にエラー発生: ${error}`);
             }
         });
 
-        document.addEventListener('mouseup', (e) => {
+        document.addEventListener('mouseup', () => {
             try {
                 if (isDragging) {
                     isDragging = false;
                     element.classList.remove('dragging');
                 }
             } catch (error) {
-                console.error('makeDraggable mouseupエラー:', error);
+                debugLog(1, `makeDraggable mouseup中にエラー発生: ${error}`);
             }
         });
     } catch (error) {
-        console.error('makeDraggable関数内でエラー:', error);
+        debugLog(1, `makeDraggable() でエラー発生: ${error}`);
     }
 }
 

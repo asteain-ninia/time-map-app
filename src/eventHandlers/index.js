@@ -2,6 +2,7 @@
 
 import { setupUIEventListeners } from './uiEventHandlers.js';
 import { setupIPCEventListeners } from './ipcEventHandlers.js';
+import { debugLog } from '../utils/logger.js';
 
 /**
  * eventHandlers の一括設定メソッド
@@ -12,9 +13,16 @@ import { setupIPCEventListeners } from './ipcEventHandlers.js';
  * @param {Function} renderData - 再描画関数
  */
 export function setupEventHandlers(DataStore, MapModuleInstance, ipc, renderData) {
-    // UIイベント（DOM操作系）
-    setupUIEventListeners(DataStore, MapModuleInstance, renderData);
+    debugLog(4, 'setupEventHandlers() が呼び出されました。');
+    try {
+        // UIイベント（DOM操作系）
+        setupUIEventListeners(DataStore, MapModuleInstance, renderData);
 
-    // IPC関連イベント
-    setupIPCEventListeners(ipc, renderData);
+        // IPC関連イベント
+        setupIPCEventListeners(ipc, renderData);
+
+    } catch (error) {
+        debugLog(1, `setupEventHandlers() でエラーが発生しました: ${error}`);
+        console.error('setupEventHandlers エラー:', error);
+    }
 }

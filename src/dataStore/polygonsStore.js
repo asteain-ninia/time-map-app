@@ -8,9 +8,10 @@ import { showNotification } from '../ui/forms.js';
 const polygons = new Map();
 
 const PolygonsStore = {
+
     getPolygons(year) {
+        debugLog(4, `PolygonsStore.getPolygons() が呼び出されました。year=${year}`);
         try {
-            debugLog(4, '面情報を年に応じて取得します。');
             return Array.from(polygons.values())
                 .map(polygon => {
                     let properties = null;
@@ -45,58 +46,60 @@ const PolygonsStore = {
                 })
                 .filter(pg => pg !== null);
         } catch (error) {
-            console.error('PolygonsStore.getPolygons エラー:', error);
+            debugLog(1, `PolygonsStore.getPolygons() でエラー発生: ${error}`);
             showNotification('面情報の取得中にエラーが発生しました。', 'error');
             return [];
         }
     },
 
     getAllPolygons() {
+        debugLog(4, `PolygonsStore.getAllPolygons() が呼び出されました。`);
         try {
-            debugLog(4, 'すべての面情報を取得します。');
             return Array.from(polygons.values());
         } catch (error) {
-            console.error('PolygonsStore.getAllPolygons エラー:', error);
+            debugLog(1, `PolygonsStore.getAllPolygons() でエラー発生: ${error}`);
             showNotification('面情報の一覧取得中にエラーが発生しました。', 'error');
             return [];
         }
     },
 
     addPolygon(polygon) {
+        debugLog(4, `PolygonsStore.addPolygon() が呼び出されました。polygon.id=${polygon?.id}`);
         try {
-            debugLog(3, '面情報を追加します。');
             polygons.set(polygon.id, polygon);
         } catch (error) {
-            console.error('PolygonsStore.addPolygon エラー:', error);
+            debugLog(1, `PolygonsStore.addPolygon() でエラー発生: ${error}`);
             showNotification('面情報の追加中にエラーが発生しました。', 'error');
         }
     },
 
     updatePolygon(updatedPolygon) {
+        debugLog(4, `PolygonsStore.updatePolygon() が呼び出されました。updatedPolygon.id=${updatedPolygon?.id}`);
         try {
-            debugLog(4, '面情報を更新します。');
             if (polygons.has(updatedPolygon.id)) {
                 polygons.set(updatedPolygon.id, updatedPolygon);
             } else {
+                debugLog(3, `PolygonsStore.updatePolygon() - 更新対象の面情報が見つかりません。ID: ${updatedPolygon?.id}`);
                 console.warn('更新対象の面情報が見つかりません。ID:', updatedPolygon.id);
             }
         } catch (error) {
-            console.error('PolygonsStore.updatePolygon エラー:', error);
+            debugLog(1, `PolygonsStore.updatePolygon() でエラー発生: ${error}`);
             showNotification('面情報の更新中にエラーが発生しました。', 'error');
         }
     },
 
     removePolygon(id) {
+        debugLog(4, `PolygonsStore.removePolygon() が呼び出されました。id=${id}`);
         try {
-            debugLog(3, '面情報を削除します。');
             polygons.delete(id);
         } catch (error) {
-            console.error('PolygonsStore.removePolygon エラー:', error);
+            debugLog(1, `PolygonsStore.removePolygon() でエラー発生: ${error}`);
             showNotification('面情報の削除中にエラーが発生しました。', 'error');
         }
     },
 
     clear() {
+        debugLog(3, 'PolygonsStore.clear() が呼び出されました。');
         polygons.clear();
     }
 };
