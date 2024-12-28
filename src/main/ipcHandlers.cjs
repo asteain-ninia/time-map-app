@@ -5,17 +5,12 @@ const fs = require('fs');
 const path = require('path');
 
 const { getMainWindow } = require('./windowManager.cjs');
+let currentLogFilePath = null;
 
-/**
- * IPC通信ハンドラを登録する関数。
- * main.cjs 側から呼び出してセットアップしておく。
- */
 function registerIPCHandlers() {
-    console.log('registerIPCHandlers() が呼び出されました。');
 
     // データ保存
     ipcMain.on('save-data', (event, data) => {
-        console.log("ipcMain.on('save-data') が呼び出されました。");
         try {
             const mainWindow = getMainWindow();
             dialog.showSaveDialog(mainWindow, {
@@ -24,33 +19,26 @@ function registerIPCHandlers() {
                 filters: [{ name: 'JSON Files', extensions: ['json'] }],
             }).then((result) => {
                 if (!result.canceled && result.filePath) {
-                    console.log(`ファイル保存先: ${result.filePath}`);
                     fs.writeFile(result.filePath, JSON.stringify(data, null, 2), (err) => {
                         if (err) {
-                            console.error('データの保存中にエラー:', err);
                             event.reply('save-data-reply', false);
                         } else {
-                            console.log(`データ保存成功: ${result.filePath}`);
                             event.reply('save-data-reply', true);
                         }
                     });
                 } else {
-                    console.log('ユーザーが保存ダイアログをキャンセル。save-data-reply を false で返す。');
                     event.reply('save-data-reply', false);
                 }
             }).catch((err) => {
-                console.error('データの保存中にエラー:', err);
                 event.reply('save-data-reply', false);
             });
         } catch (error) {
-            console.error('save-data イベント処理中にエラー:', error);
             event.reply('save-data-reply', false);
         }
     });
 
     // データ読み込み
     ipcMain.on('load-data', (event) => {
-        console.log("ipcMain.on('load-data') が呼び出されました。");
         try {
             const mainWindow = getMainWindow();
             dialog.showOpenDialog(mainWindow, {
@@ -58,17 +46,14 @@ function registerIPCHandlers() {
                 filters: [{ name: 'JSON Files', extensions: ['json'] }],
             }).then((result) => {
                 if (!result.canceled && result.filePaths.length > 0) {
-                    console.log(`ファイル読込先: ${result.filePaths[0]}`);
                     fs.readFile(result.filePaths[0], 'utf-8', (err, fileData) => {
                         if (err) {
-                            console.error('データの読み込み中にエラー:', err);
                             event.reply('load-data-reply', null);
                         } else {
                             try {
                                 const jsonData = JSON.parse(fileData);
                                 event.reply('load-data-reply', jsonData);
                             } catch (parseError) {
-                                console.error('データの解析中にエラー:', parseError);
                                 event.reply('load-data-reply', null);
                             }
                         }
@@ -77,18 +62,15 @@ function registerIPCHandlers() {
                     event.reply('load-data-reply', null);
                 }
             }).catch((err) => {
-                console.error('データの読み込み中にエラー:', err);
                 event.reply('load-data-reply', null);
             });
         } catch (error) {
-            console.error('load-data イベント処理中にエラー:', error);
             event.reply('load-data-reply', null);
         }
     });
 
     // 確認ダイアログ呼び出し
     ipcMain.handle('show-confirm-dialog', async (event, { title, message }) => {
-        console.log(`ipcMain.handle('show-confirm-dialog') が呼び出されました。title=${title}`);
         try {
             const mainWindow = getMainWindow();
             const result = await dialog.showMessageBox(mainWindow, {
@@ -98,11 +80,45 @@ function registerIPCHandlers() {
                 title: title,
                 message: message,
             });
-            console.log(`show-confirm-dialog の結果: response=${result.response}`);
-            return (result.response === 0); // 'はい' ならtrue
+            return (result.response === 0);
         } catch (error) {
-            console.error('確認ダイアログの表示中にエラー:', error);
             return false;
+        }
+    });
+
+    // レンダラからのログ開始要求
+    ipcMain.on('start-logging', (event) => {
+        try {
+            const logDir = path.join(__dirname, '../../log');
+            if (!fs.existsSync(logDir)) {
+                fs.mkdirSync(logDir);
+            }
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            currentLogFilePath = path.join(logDir, `app_${timestamp}.log`);
+            fs.writeFileSync(
+                currentLogFilePath,
+                `Log started at ${new Date().toLocaleString()}\n`,
+                { flag: 'w' }
+            );
+        } catch (error) {
+            console.error('start-logging エラー:', error);
+        }
+    });
+
+    // レンダラからのログ追記要求
+    ipcMain.on('log-message', (event, { level, message, error }) => {
+        try {
+            if (!currentLogFilePath) {
+                return;
+            }
+            let line = `[level=${level}] ${message}`;
+            if (error) {
+                line += ` - ${error}`;
+            }
+            line += '\n';
+            fs.appendFileSync(currentLogFilePath, line, { encoding: 'utf8' });
+        } catch (err) {
+            console.error('log-message エラー:', err);
         }
     });
 }

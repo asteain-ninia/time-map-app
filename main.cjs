@@ -1,15 +1,19 @@
 // main.cjs
 
-const { app } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const { createMainWindow } = require('./src/main/windowManager.cjs');
 const { registerIPCHandlers } = require('./src/main/ipcHandlers.cjs');
+const { registerLoggerIPC } = require('./src/main/logger.cjs');
 
 function onReady() {
-    // 1) ウィンドウ作成
+    // ウィンドウ作成
     createMainWindow();
 
-    // 2) IPCハンドラを登録
+    // IPCハンドラを登録
     registerIPCHandlers();
+
+    // ロガーIPCハンドラを登録
+    registerLoggerIPC(ipcMain);
 }
 
 // アプリが準備完了したらメインウィンドウ作成などを行う

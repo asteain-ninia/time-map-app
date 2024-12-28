@@ -19,7 +19,6 @@ const listeners = [];
  * @returns {Object} state のコピー
  */
 function getState() {
-    aa
     try {
         return { ...state };
     } catch (error) {
