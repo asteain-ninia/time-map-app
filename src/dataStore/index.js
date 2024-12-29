@@ -34,11 +34,7 @@ const DataStore = {
         }
     },
 
-    /**
-     * @param {Object} p
-     * @param {boolean} shouldRecord - Undo履歴に残すかどうか
-     */
-    addPoint: (p, shouldRecord = true) => {
+    addPoint: (p, shouldRecord = false) => {
         debugLog(4, `DataStore.addPoint() が呼び出されました。point.id=${p?.id}, shouldRecord=${shouldRecord}`);
         try {
             PointsStore.addPoint(p);
@@ -54,18 +50,14 @@ const DataStore = {
         }
     },
 
-    /**
-     * @param {Object} p
-     * @param {boolean} shouldRecord
-     */
-    updatePoint: (p, shouldRecord = true) => {
+    updatePoint: (p, shouldRecord = false) => {
         debugLog(4, `DataStore.updatePoint() が呼び出されました。point.id=${p?.id}, shouldRecord=${shouldRecord}`);
         try {
-            // update前の旧オブジェクトを取得
             const oldObj = PointsStore.getById(p.id);
             PointsStore.updatePoint(p);
             unsavedChanges = true;
 
+            // ここでは呼び出し側がrecordするため、基本false
             if (shouldRecord && oldObj) {
                 const action = UndoRedoManager.makeAction('updatePoint', oldObj, p);
                 UndoRedoManager.record(action);
@@ -76,14 +68,9 @@ const DataStore = {
         }
     },
 
-    /**
-     * @param {string|number} id
-     * @param {boolean} shouldRecord
-     */
-    removePoint: (id, shouldRecord = true) => {
+    removePoint: (id, shouldRecord = false) => {
         debugLog(4, `DataStore.removePoint() が呼び出されました。id=${id}, shouldRecord=${shouldRecord}`);
         try {
-            // remove前のオブジェクト
             const oldObj = PointsStore.getById(id);
             PointsStore.removePoint(id);
             unsavedChanges = true;
@@ -120,7 +107,7 @@ const DataStore = {
         }
     },
 
-    addLine: (l, shouldRecord = true) => {
+    addLine: (l, shouldRecord = false) => {
         debugLog(4, `DataStore.addLine() が呼び出されました。line.id=${l?.id}, shouldRecord=${shouldRecord}`);
         try {
             LinesStore.addLine(l);
@@ -136,7 +123,7 @@ const DataStore = {
         }
     },
 
-    updateLine: (l, shouldRecord = true) => {
+    updateLine: (l, shouldRecord = false) => {
         debugLog(4, `DataStore.updateLine() が呼び出されました。line.id=${l?.id}, shouldRecord=${shouldRecord}`);
         try {
             const oldObj = LinesStore.getById(l.id);
@@ -153,7 +140,7 @@ const DataStore = {
         }
     },
 
-    removeLine: (id, shouldRecord = true) => {
+    removeLine: (id, shouldRecord = false) => {
         debugLog(4, `DataStore.removeLine() が呼び出されました。id=${id}, shouldRecord=${shouldRecord}`);
         try {
             const oldObj = LinesStore.getById(id);
@@ -192,7 +179,7 @@ const DataStore = {
         }
     },
 
-    addPolygon: (pg, shouldRecord = true) => {
+    addPolygon: (pg, shouldRecord = false) => {
         debugLog(4, `DataStore.addPolygon() が呼び出されました。polygon.id=${pg?.id}, shouldRecord=${shouldRecord}`);
         try {
             PolygonsStore.addPolygon(pg);
@@ -208,7 +195,7 @@ const DataStore = {
         }
     },
 
-    updatePolygon: (pg, shouldRecord = true) => {
+    updatePolygon: (pg, shouldRecord = false) => {
         debugLog(4, `DataStore.updatePolygon() が呼び出されました。polygon.id=${pg?.id}, shouldRecord=${shouldRecord}`);
         try {
             const oldObj = PolygonsStore.getById(pg.id);
@@ -225,7 +212,7 @@ const DataStore = {
         }
     },
 
-    removePolygon: (id, shouldRecord = true) => {
+    removePolygon: (id, shouldRecord = false) => {
         debugLog(4, `DataStore.removePolygon() が呼び出されました。id=${id}, shouldRecord=${shouldRecord}`);
         try {
             const oldObj = PolygonsStore.getById(id);
@@ -258,6 +245,7 @@ const DataStore = {
         debugLog(4, 'DataStore.hasUnsavedChanges() が呼び出されました。');
         return unsavedChanges;
     },
+
     resetUnsavedChanges() {
         debugLog(4, 'DataStore.resetUnsavedChanges() が呼び出されました。');
         unsavedChanges = false;
@@ -266,7 +254,7 @@ const DataStore = {
     loadData(data) {
         debugLog(3, 'DataStore.loadData() が呼び出されました。');
         try {
-            // ここはUndo対象外なのでshouldRecord=falseでクリア等実行
+            // Undo対象外
             PointsStore.clear();
             LinesStore.clear();
             PolygonsStore.clear();
