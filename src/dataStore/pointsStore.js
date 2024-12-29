@@ -148,6 +148,22 @@ const PointsStore = {
         }
     },
 
+    /**
+     * IDを指定してPointオブジェクトを取得 (なければnull)
+     */
+    getById(id) {
+        debugLog(4, `PointsStore.getById() が呼び出されました。id=${id}`);
+        try {
+            if (!points.has(id)) {
+                return null;
+            }
+            return points.get(id);
+        } catch (error) {
+            debugLog(1, `PointsStore.getById() でエラー発生: ${error}`);
+            return null;
+        }
+    },
+
     clear() {
         debugLog(3, 'PointsStore.clear() が呼び出されました。');
         points.clear();

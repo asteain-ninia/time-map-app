@@ -98,6 +98,22 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * IDを指定してPolygonオブジェクトを取得
+     */
+    getById(id) {
+        debugLog(4, `PolygonsStore.getById() が呼び出されました。id=${id}`);
+        try {
+            if (!polygons.has(id)) {
+                return null;
+            }
+            return polygons.get(id);
+        } catch (error) {
+            debugLog(1, `PolygonsStore.getById() でエラー発生: ${error}`);
+            return null;
+        }
+    },
+
     clear() {
         debugLog(3, 'PolygonsStore.clear() が呼び出されました。');
         polygons.clear();

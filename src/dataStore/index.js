@@ -6,11 +6,8 @@ import LinesStore from './linesStore.js';
 import PolygonsStore from './polygonsStore.js';
 import { debugLog } from '../utils/logger.js';
 import uiManager from '../ui/uiManager.js';
+import UndoRedoManager from '../utils/undoRedoManager.js';
 
-/**
- * DataStore 全体を統括するモジュール
- * 点情報・線情報・面情報の管理機能をまとめる
- */
 let unsavedChanges = false;
 
 const DataStore = {
@@ -37,33 +34,64 @@ const DataStore = {
         }
     },
 
-    addPoint: (p) => {
-        debugLog(4, `DataStore.addPoint() が呼び出されました。point.id=${p?.id}`);
+    /**
+     * @param {Object} p
+     * @param {boolean} shouldRecord - Undo履歴に残すかどうか
+     */
+    addPoint: (p, shouldRecord = true) => {
+        debugLog(4, `DataStore.addPoint() が呼び出されました。point.id=${p?.id}, shouldRecord=${shouldRecord}`);
         try {
             PointsStore.addPoint(p);
             unsavedChanges = true;
+
+            if (shouldRecord) {
+                const action = UndoRedoManager.makeAction('addPoint', null, p);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.addPoint() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.addPoint() でエラーが発生しました: ${error}`, 'error');
         }
     },
 
-    updatePoint: (p) => {
-        debugLog(4, `DataStore.updatePoint() が呼び出されました。point.id=${p?.id}`);
+    /**
+     * @param {Object} p
+     * @param {boolean} shouldRecord
+     */
+    updatePoint: (p, shouldRecord = true) => {
+        debugLog(4, `DataStore.updatePoint() が呼び出されました。point.id=${p?.id}, shouldRecord=${shouldRecord}`);
         try {
+            // update前の旧オブジェクトを取得
+            const oldObj = PointsStore.getById(p.id);
             PointsStore.updatePoint(p);
             unsavedChanges = true;
+
+            if (shouldRecord && oldObj) {
+                const action = UndoRedoManager.makeAction('updatePoint', oldObj, p);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.updatePoint() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.updatePoint() でエラーが発生しました: ${error}`, 'error');
         }
     },
 
-    removePoint: (id) => {
-        debugLog(4, `DataStore.removePoint() が呼び出されました。id=${id}`);
+    /**
+     * @param {string|number} id
+     * @param {boolean} shouldRecord
+     */
+    removePoint: (id, shouldRecord = true) => {
+        debugLog(4, `DataStore.removePoint() が呼び出されました。id=${id}, shouldRecord=${shouldRecord}`);
         try {
+            // remove前のオブジェクト
+            const oldObj = PointsStore.getById(id);
             PointsStore.removePoint(id);
             unsavedChanges = true;
+
+            if (shouldRecord && oldObj) {
+                const action = UndoRedoManager.makeAction('removePoint', oldObj, null);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.removePoint() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.removePoint() でエラーが発生しました: ${error}`, 'error');
@@ -92,33 +120,50 @@ const DataStore = {
         }
     },
 
-    addLine: (l) => {
-        debugLog(4, `DataStore.addLine() が呼び出されました。line.id=${l?.id}`);
+    addLine: (l, shouldRecord = true) => {
+        debugLog(4, `DataStore.addLine() が呼び出されました。line.id=${l?.id}, shouldRecord=${shouldRecord}`);
         try {
             LinesStore.addLine(l);
             unsavedChanges = true;
+
+            if (shouldRecord) {
+                const action = UndoRedoManager.makeAction('addLine', null, l);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.addLine() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.addLine() でエラーが発生しました: ${error}`, 'error');
         }
     },
 
-    updateLine: (l) => {
-        debugLog(4, `DataStore.updateLine() が呼び出されました。line.id=${l?.id}`);
+    updateLine: (l, shouldRecord = true) => {
+        debugLog(4, `DataStore.updateLine() が呼び出されました。line.id=${l?.id}, shouldRecord=${shouldRecord}`);
         try {
+            const oldObj = LinesStore.getById(l.id);
             LinesStore.updateLine(l);
             unsavedChanges = true;
+
+            if (shouldRecord && oldObj) {
+                const action = UndoRedoManager.makeAction('updateLine', oldObj, l);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.updateLine() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.updateLine() でエラーが発生しました: ${error}`, 'error');
         }
     },
 
-    removeLine: (id) => {
-        debugLog(4, `DataStore.removeLine() が呼び出されました。id=${id}`);
+    removeLine: (id, shouldRecord = true) => {
+        debugLog(4, `DataStore.removeLine() が呼び出されました。id=${id}, shouldRecord=${shouldRecord}`);
         try {
+            const oldObj = LinesStore.getById(id);
             LinesStore.removeLine(id);
             unsavedChanges = true;
+
+            if (shouldRecord && oldObj) {
+                const action = UndoRedoManager.makeAction('removeLine', oldObj, null);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.removeLine() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.removeLine() でエラーが発生しました: ${error}`, 'error');
@@ -147,33 +192,50 @@ const DataStore = {
         }
     },
 
-    addPolygon: (pg) => {
-        debugLog(4, `DataStore.addPolygon() が呼び出されました。polygon.id=${pg?.id}`);
+    addPolygon: (pg, shouldRecord = true) => {
+        debugLog(4, `DataStore.addPolygon() が呼び出されました。polygon.id=${pg?.id}, shouldRecord=${shouldRecord}`);
         try {
             PolygonsStore.addPolygon(pg);
             unsavedChanges = true;
+
+            if (shouldRecord) {
+                const action = UndoRedoManager.makeAction('addPolygon', null, pg);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.addPolygon() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.addPolygon() でエラーが発生しました: ${error}`, 'error');
         }
     },
 
-    updatePolygon: (pg) => {
-        debugLog(4, `DataStore.updatePolygon() が呼び出されました。polygon.id=${pg?.id}`);
+    updatePolygon: (pg, shouldRecord = true) => {
+        debugLog(4, `DataStore.updatePolygon() が呼び出されました。polygon.id=${pg?.id}, shouldRecord=${shouldRecord}`);
         try {
+            const oldObj = PolygonsStore.getById(pg.id);
             PolygonsStore.updatePolygon(pg);
             unsavedChanges = true;
+
+            if (shouldRecord && oldObj) {
+                const action = UndoRedoManager.makeAction('updatePolygon', oldObj, pg);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.updatePolygon() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.updatePolygon() でエラーが発生しました: ${error}`, 'error');
         }
     },
 
-    removePolygon: (id) => {
-        debugLog(4, `DataStore.removePolygon() が呼び出されました。id=${id}`);
+    removePolygon: (id, shouldRecord = true) => {
+        debugLog(4, `DataStore.removePolygon() が呼び出されました。id=${id}, shouldRecord=${shouldRecord}`);
         try {
+            const oldObj = PolygonsStore.getById(id);
             PolygonsStore.removePolygon(id);
             unsavedChanges = true;
+
+            if (shouldRecord && oldObj) {
+                const action = UndoRedoManager.makeAction('removePolygon', oldObj, null);
+                UndoRedoManager.record(action);
+            }
         } catch (error) {
             debugLog(1, `DataStore.removePolygon() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.removePolygon() でエラーが発生しました: ${error}`, 'error');
@@ -192,7 +254,6 @@ const DataStore = {
         }
     },
 
-    // 変更管理フラグ
     hasUnsavedChanges() {
         debugLog(4, 'DataStore.hasUnsavedChanges() が呼び出されました。');
         return unsavedChanges;
@@ -202,30 +263,27 @@ const DataStore = {
         unsavedChanges = false;
     },
 
-    /**
-     * JSON 等からロード
-     * @param {Object} data
-     */
     loadData(data) {
         debugLog(3, 'DataStore.loadData() が呼び出されました。');
         try {
+            // ここはUndo対象外なのでshouldRecord=falseでクリア等実行
             PointsStore.clear();
             LinesStore.clear();
             PolygonsStore.clear();
 
             if (data.points) {
                 data.points.forEach((point) => {
-                    this.addPoint(point);
+                    this.addPoint(point, false);
                 });
             }
             if (data.lines) {
                 data.lines.forEach((line) => {
-                    this.addLine(line);
+                    this.addLine(line, false);
                 });
             }
             if (data.polygons) {
                 data.polygons.forEach((polygon) => {
-                    this.addPolygon(polygon);
+                    this.addPolygon(polygon, false);
                 });
             }
             unsavedChanges = false;
@@ -235,10 +293,6 @@ const DataStore = {
         }
     },
 
-    /**
-     * 現在の全データをまとめて返却
-     * @returns {Object} { points, lines, polygons, metadata }
-     */
     getData() {
         debugLog(3, 'DataStore.getData() が呼び出されました。');
         try {

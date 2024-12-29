@@ -97,6 +97,22 @@ const LinesStore = {
         }
     },
 
+    /**
+     * IDを指定してLineオブジェクトを取得
+     */
+    getById(id) {
+        debugLog(4, `LinesStore.getById() が呼び出されました。id=${id}`);
+        try {
+            if (!lines.has(id)) {
+                return null;
+            }
+            return lines.get(id);
+        } catch (error) {
+            debugLog(1, `LinesStore.getById() でエラー発生: ${error}`);
+            return null;
+        }
+    },
+
     clear() {
         debugLog(3, 'LinesStore.clear() が呼び出されました。');
         lines.clear();

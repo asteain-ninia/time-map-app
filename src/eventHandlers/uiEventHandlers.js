@@ -7,6 +7,7 @@ import { removeSelectedVertices } from '../map/mapInteraction.js';
 import { getMapWidth } from '../map/mapRenderer.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
+import UndoRedoManager from '../utils/undoRedoManager.js';
 
 /**
  * UIイベント系のリスナーを設定する
@@ -320,7 +321,6 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
         });
 
         window.addEventListener('click', (event) => {
-            // モーダル背景をクリックしたときに閉じる
             try {
                 const settingsModal = document.getElementById('settingsModal');
                 if (event.target === settingsModal) {
@@ -333,6 +333,22 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
 
         document.addEventListener('keydown', (e) => {
             try {
+                // Undo (Ctrl+Z)
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                    e.preventDefault();
+                    UndoRedoManager.undo();
+                    renderData();
+                    return;
+                }
+                // Redo (Ctrl+Y)
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                    e.preventDefault();
+                    UndoRedoManager.redo();
+                    renderData();
+                    return;
+                }
+
+                // Deleteキー
                 if (e.key === 'Delete') {
                     debugLog(4, 'Deleteキー押下イベントが発生しました。');
                     const state = stateManager.getState();
@@ -348,7 +364,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                     }
                 }
             } catch (error) {
-                debugLog(1, `Deleteキー押下時にエラー: ${error}`);
+                debugLog(1, `キー押下時にエラー: ${error}`);
             }
         });
 
