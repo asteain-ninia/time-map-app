@@ -9,7 +9,7 @@ import uiManager from '../ui/uiManager.js';
  * ログレベルが足りない場合は何も出力しない。
  */
 export function debugLog(level, message, error) {
-    console.log(`debugLog() レンダラー: level=${level}, msg=${message}`);
+    console.log(`debugLog() レンダラー: level=${level}, ${message}`);
     const st = stateManager.getState();
     if (st.debugLevel === undefined || st.debugLevel === null) {
         return;
