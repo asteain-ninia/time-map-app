@@ -18,8 +18,7 @@ const DataStore = {
     getPoints: (year) => {
         debugLog(4, `DataStore.getPoints() が呼び出されました。year=${year}`);
         try {
-            const result = PointsStore.getPoints(year);
-            return result;
+            return PointsStore.getPoints(year);
         } catch (error) {
             debugLog(1, `DataStore.getPoints() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.getPoints() でエラーが発生しました: ${error}`, 'error');
@@ -30,8 +29,7 @@ const DataStore = {
     getAllPoints: () => {
         debugLog(4, `DataStore.getAllPoints() が呼び出されました。`);
         try {
-            const result = PointsStore.getAllPoints();
-            return result;
+            return PointsStore.getAllPoints();
         } catch (error) {
             debugLog(1, `DataStore.getAllPoints() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.getAllPoints() でエラーが発生しました: ${error}`, 'error');
@@ -75,8 +73,7 @@ const DataStore = {
     getLines: (year) => {
         debugLog(4, `DataStore.getLines() が呼び出されました。year=${year}`);
         try {
-            const result = LinesStore.getLines(year);
-            return result;
+            return LinesStore.getLines(year);
         } catch (error) {
             debugLog(1, `DataStore.getLines() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.getLines() でエラーが発生しました: ${error}`, 'error');
@@ -87,11 +84,10 @@ const DataStore = {
     getAllLines: () => {
         debugLog(4, `DataStore.getAllLines() が呼び出されました。`);
         try {
-            const result = LinesStore.getAllLines();
-            return result;
+            return LinesStore.getAllLines();
         } catch (error) {
             debugLog(1, `DataStore.getAllLines() でエラー発生: ${error}`);
-            uiManager.showNotification(`DataStore.getAllLines() でエラーが発生しました: ${error}`, 'error');
+            uiManager.showNotification(`DataStore.getAllLines() でエラーが発生しました。`, 'error');
             return [];
         }
     },
@@ -132,8 +128,7 @@ const DataStore = {
     getPolygons: (year) => {
         debugLog(4, `DataStore.getPolygons() が呼び出されました。year=${year}`);
         try {
-            const result = PolygonsStore.getPolygons(year);
-            return result;
+            return PolygonsStore.getPolygons(year);
         } catch (error) {
             debugLog(1, `DataStore.getPolygons() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.getPolygons() でエラーが発生しました: ${error}`, 'error');
@@ -144,11 +139,10 @@ const DataStore = {
     getAllPolygons: () => {
         debugLog(4, `DataStore.getAllPolygons() が呼び出されました。`);
         try {
-            const result = PolygonsStore.getAllPolygons();
-            return result;
+            return PolygonsStore.getAllPolygons();
         } catch (error) {
             debugLog(1, `DataStore.getAllPolygons() でエラー発生: ${error}`);
-            uiManager.showNotification(`DataStore.getAllPolygons() でエラーが発生しました: ${error}`, 'error');
+            uiManager.showNotification(`DataStore.getAllPolygons() でエラーが発生しました。`, 'error');
             return [];
         }
     },
@@ -237,7 +231,6 @@ const DataStore = {
             unsavedChanges = false;
         } catch (error) {
             debugLog(1, `DataStore.loadData() でエラー発生: ${error}`);
-            console.error('DataStore.loadData エラー:', error);
             uiManager.showNotification('データの読み込み中にエラーが発生しました。', 'error');
         }
     },
@@ -249,21 +242,20 @@ const DataStore = {
     getData() {
         debugLog(3, 'DataStore.getData() が呼び出されました。');
         try {
-            const state = stateManager.getState();
+            const st = stateManager.getState();
             return {
                 points: this.getAllPoints(),
                 lines: this.getAllLines(),
                 polygons: this.getAllPolygons(),
                 metadata: {
-                    sliderMin: state.sliderMin,
-                    sliderMax: state.sliderMax,
-                    worldName: state.worldName,
-                    worldDescription: state.worldDescription,
+                    sliderMin: st.sliderMin,
+                    sliderMax: st.sliderMax,
+                    worldName: st.worldName,
+                    worldDescription: st.worldDescription,
                 },
             };
         } catch (error) {
             debugLog(1, `DataStore.getData() でエラー発生: ${error}`);
-            console.error('DataStore.getData エラー:', error);
             uiManager.showNotification('全データの取得中にエラーが発生しました。', 'error');
             return null;
         }
