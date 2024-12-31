@@ -8,6 +8,7 @@ import { getMapWidth } from '../map/mapRenderer.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import UndoRedoManager from '../utils/undoRedoManager.js';
+import DataStore from '../dataStore/index.js';
 
 /**
  * UIイベント系のリスナーを設定する
@@ -337,6 +338,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
                     e.preventDefault();
                     UndoRedoManager.undo();
+                    syncSelectedFeatureAfterUndoRedo();
                     renderData();
                     return;
                 }
@@ -344,6 +346,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
                     e.preventDefault();
                     UndoRedoManager.redo();
+                    syncSelectedFeatureAfterUndoRedo();
                     renderData();
                     return;
                 }
@@ -405,6 +408,31 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                 });
             } else {
                 callback();
+            }
+        }
+
+        /**
+         * Undo/Redo後、選択中フィーチャが正しくDataStoreの状態と同期するようにする
+         */
+        function syncSelectedFeatureAfterUndoRedo() {
+            debugLog(4, 'syncSelectedFeatureAfterUndoRedo() が呼び出されました。');
+            try {
+                const st = stateManager.getState();
+                if (!st.selectedFeature) return;
+
+                const itemId = st.selectedFeature.id;
+                if (!itemId) return;
+
+                const found = DataStore.getById(itemId);
+                if (found) {
+                    // 選択頂点は位置が変わっている可能性もあるのでいったんクリア
+                    stateManager.setState({ selectedFeature: found, selectedVertices: [] });
+                } else {
+                    // すでに削除された場合
+                    stateManager.setState({ selectedFeature: null, selectedVertices: [] });
+                }
+            } catch (error) {
+                debugLog(1, `syncSelectedFeatureAfterUndoRedo() でエラー発生: ${error}`);
             }
         }
     } catch (error) {

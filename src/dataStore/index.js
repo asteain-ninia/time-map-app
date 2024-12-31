@@ -302,6 +302,23 @@ const DataStore = {
             return null;
         }
     },
+
+    /**
+     * 全ストアから指定IDに該当する要素を検索して返す
+     * なければnull
+     */
+    getById: (id) => {
+        const p = PointsStore.getById(id);
+        if (p) return p;
+
+        const l = LinesStore.getById(id);
+        if (l) return l;
+
+        const pol = PolygonsStore.getById(id);
+        if (pol) return pol;
+
+        return null;
+    },
 };
 
 export default DataStore;
