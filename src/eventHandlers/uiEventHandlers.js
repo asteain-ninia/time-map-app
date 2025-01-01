@@ -144,13 +144,27 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                         const isPolygon = (currentState.currentTool === 'polygonVertexEdit');
                         const requiredMin = isPolygon ? 3 : 2;
 
+                        // 頂点不足の状態でさらにクリック→頂点追加
                         if (feature.points && feature.points.length < requiredMin) {
+                            const beforePoints = feature.points.slice();
                             feature.points.push({ x: finalX, y: scaledY });
+                            const afterPoints = feature.points.slice();
+
+                            // DataStore側を更新（shouldRecord = false）
                             if (currentState.currentTool === 'lineVertexEdit') {
-                                DataStore.updateLine(feature);
+                                DataStore.updateLine(feature, false);
                             } else {
-                                DataStore.updatePolygon(feature);
+                                DataStore.updatePolygon(feature, false);
                             }
+
+                            // 頂点追加のUndo用
+                            const actionType = isPolygon ? 'tempPolygonAddVertex' : 'tempLineAddVertex';
+                            const action = UndoRedoManager.makeAction(actionType,
+                                { tempPoints: beforePoints },
+                                { tempPoints: afterPoints }
+                            );
+                            UndoRedoManager.record(action);
+
                             renderData();
                             return;
                         }
@@ -159,34 +173,87 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                     // 追加モード
                     if (currentState.isAddMode) {
                         if (currentState.currentTool === 'point') {
+                            // 点を一度クリックしたタイミングで "tempPoint" をセット
+                            // → UndoRedoManager でこの状態を管理可能にする
+                            const beforePoint = currentState.tempPoint ? { ...currentState.tempPoint } : null;
+                            const afterPoint = { x: finalX, y: scaledY };
+                            const action = UndoRedoManager.makeAction('tempPointSet',
+                                { tempPoint: beforePoint },
+                                { tempPoint: afterPoint }
+                            );
+                            UndoRedoManager.record(action);
+
                             stateManager.setState({
                                 isDrawing: true,
-                                tempPoint: { x: finalX, y: scaledY },
+                                tempPoint: afterPoint,
                             });
                             renderData();
                             showEditForm(null, renderData);
+
                         } else if (currentState.currentTool === 'line') {
                             if (!currentState.isDrawing) {
+                                // 最初の頂点追加
+                                const beforePoints = [];
+                                const afterPoints = [{ x: finalX, y: scaledY }];
+
                                 stateManager.setState({
                                     isDrawing: true,
-                                    tempLinePoints: [{ x: finalX, y: scaledY }],
+                                    tempLinePoints: afterPoints
                                 });
+                                renderData();
+
+                                // 頂点追加アクション記録
+                                const action = UndoRedoManager.makeAction('tempLineAddVertex',
+                                    { tempLinePoints: beforePoints },
+                                    { tempLinePoints: afterPoints }
+                                );
+                                UndoRedoManager.record(action);
+
                             } else {
-                                const updatedPoints = [...currentState.tempLinePoints, { x: finalX, y: scaledY }];
+                                // 2個目以降の頂点追加
+                                const beforePoints = currentState.tempLinePoints.slice();
+                                const updatedPoints = [...beforePoints, { x: finalX, y: scaledY }];
                                 stateManager.setState({ tempLinePoints: updatedPoints });
+                                renderData();
+
+                                const action = UndoRedoManager.makeAction('tempLineAddVertex',
+                                    { tempLinePoints: beforePoints },
+                                    { tempLinePoints: updatedPoints }
+                                );
+                                UndoRedoManager.record(action);
                             }
-                            renderData();
+
                         } else if (currentState.currentTool === 'polygon') {
                             if (!currentState.isDrawing) {
+                                // 最初の頂点追加
+                                const beforePoints = [];
+                                const afterPoints = [{ x: finalX, y: scaledY }];
+
                                 stateManager.setState({
                                     isDrawing: true,
-                                    tempPolygonPoints: [{ x: finalX, y: scaledY }],
+                                    tempPolygonPoints: afterPoints
                                 });
+                                renderData();
+
+                                const action = UndoRedoManager.makeAction('tempPolygonAddVertex',
+                                    { tempPolygonPoints: beforePoints },
+                                    { tempPolygonPoints: afterPoints }
+                                );
+                                UndoRedoManager.record(action);
+
                             } else {
-                                const updatedPoints = [...currentState.tempPolygonPoints, { x: finalX, y: scaledY }];
+                                // 2個目以降の頂点追加
+                                const beforePoints = currentState.tempPolygonPoints.slice();
+                                const updatedPoints = [...beforePoints, { x: finalX, y: scaledY }];
                                 stateManager.setState({ tempPolygonPoints: updatedPoints });
+                                renderData();
+
+                                const action = UndoRedoManager.makeAction('tempPolygonAddVertex',
+                                    { tempPolygonPoints: beforePoints },
+                                    { tempPolygonPoints: updatedPoints }
+                                );
+                                UndoRedoManager.record(action);
                             }
-                            renderData();
                         }
                     }
                 } catch (error) {
@@ -212,7 +279,9 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                                 description: '',
                             }],
                         };
-                        DataStore.addLine(newLine);
+                        // DataStoreへの追加を「shouldRecord=true」にすることで、UndoRedoManagerに最終"addLine"が積まれる
+                        DataStore.addLine(newLine, true);
+
                         stateManager.setState({
                             isDrawing: false,
                             tempLinePoints: [],
@@ -220,6 +289,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                         });
                         renderData();
                         showLineEditForm(newLine, renderData, true, true);
+
                     } else if (currentState.currentTool === 'polygon' && currentState.tempPolygonPoints.length >= 3) {
                         const newPolygon = {
                             id: Date.now(),
@@ -230,7 +300,8 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                                 description: '',
                             }],
                         };
-                        DataStore.addPolygon(newPolygon);
+                        DataStore.addPolygon(newPolygon, true);
+
                         stateManager.setState({
                             isDrawing: false,
                             tempPolygonPoints: [],
