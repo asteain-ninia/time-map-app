@@ -133,7 +133,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                     const correctedX = adjustedX < 0 ? adjustedX + mapWidthVal : adjustedX;
                     const finalX = correctedX + offsetXValue;
 
-                    // 編集モード & 頂点編集ツール
+                    // 編集モード & 頂点編集ツール (lineVertexEdit / polygonVertexEdit)
                     if (
                         currentState.isEditMode &&
                         (currentState.currentTool === 'lineVertexEdit' ||
@@ -144,25 +144,22 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                         const isPolygon = (currentState.currentTool === 'polygonVertexEdit');
                         const requiredMin = isPolygon ? 3 : 2;
 
-                        // 頂点不足の状態でさらにクリック→頂点追加
+                        // 頂点不足の状態（2頂点未満のライン、3頂点未満のポリゴン）でクリック→頂点追加
                         if (feature.points && feature.points.length < requiredMin) {
-                            const beforePoints = feature.points.slice();
+                            const oldFeature = JSON.parse(JSON.stringify(feature)); // deep copy
                             feature.points.push({ x: finalX, y: scaledY });
-                            const afterPoints = feature.points.slice();
+                            const newFeature = JSON.parse(JSON.stringify(feature));
 
-                            // DataStore側を更新（shouldRecord = false）
+                            // DataStore 側を更新（record=falseで「中間」更新）
                             if (currentState.currentTool === 'lineVertexEdit') {
                                 DataStore.updateLine(feature, false);
                             } else {
                                 DataStore.updatePolygon(feature, false);
                             }
 
-                            // 頂点追加のUndo用
-                            const actionType = isPolygon ? 'tempPolygonAddVertex' : 'tempLineAddVertex';
-                            const action = UndoRedoManager.makeAction(actionType,
-                                { tempPoints: beforePoints },
-                                { tempPoints: afterPoints }
-                            );
+                            // 頂点追加アクション
+                            const actionType = isPolygon ? 'addVertexToPolygon' : 'addVertexToLine';
+                            const action = UndoRedoManager.makeAction(actionType, oldFeature, newFeature);
                             UndoRedoManager.record(action);
 
                             renderData();
@@ -173,8 +170,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                     // 追加モード
                     if (currentState.isAddMode) {
                         if (currentState.currentTool === 'point') {
-                            // 点を一度クリックしたタイミングで "tempPoint" をセット
-                            // → UndoRedoManager でこの状態を管理可能にする
+                            // 1回クリックで仮の「tempPoint」をセット
                             const beforePoint = currentState.tempPoint ? { ...currentState.tempPoint } : null;
                             const afterPoint = { x: finalX, y: scaledY };
                             const action = UndoRedoManager.makeAction('tempPointSet',
@@ -202,7 +198,6 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                                 });
                                 renderData();
 
-                                // 頂点追加アクション記録
                                 const action = UndoRedoManager.makeAction('tempLineAddVertex',
                                     { tempLinePoints: beforePoints },
                                     { tempLinePoints: afterPoints }
@@ -431,7 +426,8 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                         removeSelectedVertices();
                     } else if (selectedFeature && state.currentTool === 'pointMove') {
                         if (selectedFeature.points && selectedFeature.points.length === 1) {
-                            DataStore.removePoint(selectedFeature.id);
+                            // 削除をUndoできるよう shouldRecord = true
+                            DataStore.removePoint(selectedFeature.id, true);
                             stateManager.setState({ selectedFeature: null, selectedVertices: [] });
                             renderData();
                         }
@@ -463,9 +459,9 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                 }).then((result) => {
                     if (result) {
                         if (currentState.currentTool === 'lineVertexEdit') {
-                            DataStore.removeLine(selectedFeature.id);
+                            DataStore.removeLine(selectedFeature.id, true);
                         } else if (currentState.currentTool === 'polygonVertexEdit') {
-                            DataStore.removePolygon(selectedFeature.id);
+                            DataStore.removePolygon(selectedFeature.id, true);
                         }
                         stateManager.setState({ selectedFeature: null, selectedVertices: [] });
                         renderData();

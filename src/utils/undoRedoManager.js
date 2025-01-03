@@ -8,17 +8,18 @@ import stateManager from '../state/index.js';
 /**
  * アクションの形式:
  * {
- *   type: 'addPoint' | 'updatePoint' | 'removePoint' | 'addLine' | 'updateLine' | 'removeLine' | 'addPolygon' | 'updatePolygon' | 'removePolygon'
- *          | 'tempPointSet' | 'tempLineAddVertex' | 'tempPolygonAddVertex' | ...
- *   before: object or null,   // 更新/削除の前のオブジェクト(深いコピー)またはtempState
- *   after:  object or null,   // 更新/追加の後のオブジェクト(深いコピー)またはtempState
+ *   type: 'addPoint' | 'updatePoint' | 'removePoint' | 'addLine' | 'updateLine' | 'removeLine'
+ *          | 'addPolygon' | 'updatePolygon' | 'removePolygon'
+ *          | 'tempPointSet' | 'tempLineAddVertex' | 'tempPolygonAddVertex'
+ *          | 'addVertexToLine' | 'addVertexToPolygon'
+ *   before: object or null,
+ *   after:  object or null
  * }
  *
  * 例:
  *  - addPoint:   { type:'addPoint', before:null, after: {...} }
- *  - updateLine: { type:'updateLine', before:{...}, after:{...} }
- *  - removePolygon: { type:'removePolygon', before:{...}, after:null }
- *  - tempLineAddVertex: { type:'tempLineAddVertex', before:{ tempLinePoints:[...] }, after:{ tempLinePoints:[...] } }
+ *  - removeLine: { type:'removeLine', before:{...}, after:null }
+ *  - addVertexToPolygon: { type:'addVertexToPolygon', before:{...}, after:{...} }
  */
 
 const undoStack = [];
@@ -26,7 +27,6 @@ const redoStack = [];
 
 /**
  * オブジェクトのディープコピー関数
- * JSON.parse(JSON.stringify(...)) で最低限の深いコピーを実現
  */
 function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
@@ -35,8 +35,7 @@ function deepClone(obj) {
 const UndoRedoManager = {
 
     /**
-     * 新しいアクションを登録
-     * - 登録と同時にredoStackはクリアする (新しい操作が割り込むと古いRedoは無効になる)
+     * 新しいアクションを登録し、redoStackをクリア
      * @param {Object} action
      */
     record(action) {
@@ -87,40 +86,36 @@ const UndoRedoManager = {
      */
     makeAction(type, beforeObj, afterObj) {
         return {
-            type: type,
+            type,
             before: beforeObj ? deepClone(beforeObj) : null,
             after: afterObj ? deepClone(afterObj) : null
         };
     },
 
     /**
-     * Undo時に呼ばれる逆操作
-     * ex) addPoint => removePoint
-     *     removeLine => addLine
-     *     tempLineAddVertex => 戻す
+     * Undo用の逆操作
      */
     _revertAction(action) {
         debugLog(4, `UndoRedoManager._revertAction(): type=${action.type}`);
         switch (action.type) {
+            // Point
             case 'addPoint':
-                // "追加"を取り消す => removePoint
                 if (action.after) {
                     DataStore.removePoint(action.after.id, false);
                 }
                 break;
             case 'removePoint':
-                // "削除"を取り消す => addPoint
                 if (action.before) {
                     DataStore.addPoint(action.before, false);
                 }
                 break;
             case 'updatePoint':
-                // "更新"を取り消す => 元の状態に戻す
                 if (action.before) {
                     DataStore.updatePoint(action.before, false);
                 }
                 break;
 
+            // Line
             case 'addLine':
                 if (action.after) {
                     DataStore.removeLine(action.after.id, false);
@@ -137,6 +132,7 @@ const UndoRedoManager = {
                 }
                 break;
 
+            // Polygon
             case 'addPolygon':
                 if (action.after) {
                     DataStore.removePolygon(action.after.id, false);
@@ -153,27 +149,40 @@ const UndoRedoManager = {
                 }
                 break;
 
-            // 以下、temp系アクション
+            // temp
             case 'tempPointSet':
-                // "after"を取り消す => before状態に戻す
                 if (action.before) {
                     stateManager.setState({ tempPoint: action.before.tempPoint || null });
                 } else {
                     stateManager.setState({ tempPoint: null });
                 }
                 break;
-
-            case 'tempLineAddVertex': {
-                const beforePoints = (action.before && action.before.tempLinePoints) ? action.before.tempLinePoints : [];
-                stateManager.setState({ tempLinePoints: beforePoints });
+            case 'tempLineAddVertex':
+                if (action.before) {
+                    stateManager.setState({ tempLinePoints: action.before.tempLinePoints || [] });
+                } else {
+                    stateManager.setState({ tempLinePoints: [] });
+                }
                 break;
-            }
-
-            case 'tempPolygonAddVertex': {
-                const beforePoints = (action.before && action.before.tempPolygonPoints) ? action.before.tempPolygonPoints : [];
-                stateManager.setState({ tempPolygonPoints: beforePoints });
+            case 'tempPolygonAddVertex':
+                if (action.before) {
+                    stateManager.setState({ tempPolygonPoints: action.before.tempPolygonPoints || [] });
+                } else {
+                    stateManager.setState({ tempPolygonPoints: [] });
+                }
                 break;
-            }
+
+            // 編集モードで頂点を追加
+            case 'addVertexToLine':
+                if (action.before) {
+                    DataStore.updateLine(action.before, false);
+                }
+                break;
+            case 'addVertexToPolygon':
+                if (action.before) {
+                    DataStore.updatePolygon(action.before, false);
+                }
+                break;
 
             default:
                 debugLog(3, `Unknown action type: ${action.type}`);
@@ -182,11 +191,12 @@ const UndoRedoManager = {
     },
 
     /**
-     * Redo時に呼ばれる再適用操作
+     * Redo用の再適用
      */
     _applyAction(action) {
         debugLog(4, `UndoRedoManager._applyAction(): type=${action.type}`);
         switch (action.type) {
+            // Point
             case 'addPoint':
                 if (action.after) {
                     DataStore.addPoint(action.after, false);
@@ -203,6 +213,7 @@ const UndoRedoManager = {
                 }
                 break;
 
+            // Line
             case 'addLine':
                 if (action.after) {
                     DataStore.addLine(action.after, false);
@@ -219,6 +230,7 @@ const UndoRedoManager = {
                 }
                 break;
 
+            // Polygon
             case 'addPolygon':
                 if (action.after) {
                     DataStore.addPolygon(action.after, false);
@@ -235,24 +247,40 @@ const UndoRedoManager = {
                 }
                 break;
 
-            // temp系
+            // temp
             case 'tempPointSet':
                 if (action.after) {
                     stateManager.setState({ tempPoint: action.after.tempPoint || null });
+                } else {
+                    stateManager.setState({ tempPoint: null });
+                }
+                break;
+            case 'tempLineAddVertex':
+                if (action.after) {
+                    stateManager.setState({ tempLinePoints: action.after.tempLinePoints || [] });
+                } else {
+                    stateManager.setState({ tempLinePoints: [] });
+                }
+                break;
+            case 'tempPolygonAddVertex':
+                if (action.after) {
+                    stateManager.setState({ tempPolygonPoints: action.after.tempPolygonPoints || [] });
+                } else {
+                    stateManager.setState({ tempPolygonPoints: [] });
                 }
                 break;
 
-            case 'tempLineAddVertex': {
-                const afterPoints = (action.after && action.after.tempLinePoints) ? action.after.tempLinePoints : [];
-                stateManager.setState({ tempLinePoints: afterPoints });
+            // 編集モード頂点追加
+            case 'addVertexToLine':
+                if (action.after) {
+                    DataStore.updateLine(action.after, false);
+                }
                 break;
-            }
-
-            case 'tempPolygonAddVertex': {
-                const afterPoints = (action.after && action.after.tempPolygonPoints) ? action.after.tempPolygonPoints : [];
-                stateManager.setState({ tempPolygonPoints: afterPoints });
+            case 'addVertexToPolygon':
+                if (action.after) {
+                    DataStore.updatePolygon(action.after, false);
+                }
                 break;
-            }
 
             default:
                 debugLog(3, `Unknown action type: ${action.type}`);

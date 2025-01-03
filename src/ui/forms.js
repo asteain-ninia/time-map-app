@@ -6,6 +6,9 @@ import DataStore from '../dataStore/index.js';
 
 import uiManager from './uiManager.js';
 import { debugLog } from '../utils/logger.js';
+// import { showNotification } from './forms.js'; 
+// ↑ 同じファイル内でexportしているshowNotificationを再importしており、エラーの原因。
+//    循環参照による不具合や、「すでに定義されている」といったエラーが出るので削除する。
 
 /**
  * ポイント編集フォームを表示
@@ -14,20 +17,21 @@ import { debugLog } from '../utils/logger.js';
  * @param {Number} [x] - クリック座標(pageX)
  * @param {Number} [y] - クリック座標(pageY)
  */
-function showEditForm(point, renderData, x, y) {
+export function showEditForm(point, renderData, x, y) {
     debugLog(4, 'showEditForm() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
             console.info('showEditForm() が呼び出されました。');
         }
 
-        // 他フォームを全部閉じる
+        // 他フォームを全部閉じる（ポイント、ライン、ポリゴンのフォームなど）
         uiManager.hideAllForms();
 
         const form = document.getElementById('editForm');
         form.style.display = 'block';
         form.style.position = 'absolute';
 
+        // クリック座標が渡された場合はそこに表示
         if (typeof x === 'number' && typeof y === 'number') {
             form.style.left = (x + 10) + 'px';
             form.style.top = (y + 10) + 'px';
@@ -42,10 +46,12 @@ function showEditForm(point, renderData, x, y) {
         const currentYear = state.currentYear || 0;
 
         if (!point) {
+            // 新規作成
             document.getElementById('pointName').value = '新しいポイント';
             document.getElementById('pointDescription').value = '';
             document.getElementById('pointYear').value = currentYear;
         } else {
+            // 既存ポイントの編集
             const properties = getPropertiesForYear(point.properties, currentYear) || {
                 name: point.name || '',
                 description: point.description || '',
@@ -57,25 +63,31 @@ function showEditForm(point, renderData, x, y) {
             document.getElementById('pointYear').value = properties.year !== undefined ? properties.year : '';
         }
 
+        // 保存ボタン
         document.getElementById('savePointButton').onclick = () => {
             debugLog(4, 'savePointButton クリックイベントが発生しました。');
             try {
                 const name = document.getElementById('pointName').value;
                 const description = document.getElementById('pointDescription').value;
                 const yearInputValue = document.getElementById('pointYear').value;
-                const year = yearInputValue !== '' ? parseInt(yearInputValue, 10) : undefined;
+                const year = yearInputValue !== '' ? parseInt(yearInputValue, 10) : 0; // 入力が空なら0に
 
-                if (year === undefined || isNaN(year)) {
-                    uiManager.showNotification('年を正しく入力してください。', 'error');
+                if (isNaN(year)) {
+                    showNotification('年を正しく入力してください。', 'error');
                     return;
                 }
 
                 if (!point) {
-                    // 新規ポイント
+                    // 新規ポイントの場合
+                    const st = stateManager.getState();
+                    if (!st.tempPoint) {
+                        showNotification('tempPoint が存在しません。', 'error');
+                        return;
+                    }
                     const newPoint = {
                         id: Date.now(),
-                        x: state.tempPoint.x,
-                        y: state.tempPoint.y,
+                        x: st.tempPoint.x,
+                        y: st.tempPoint.y,
                         properties: [
                             {
                                 year: year,
@@ -84,7 +96,8 @@ function showEditForm(point, renderData, x, y) {
                             }
                         ],
                     };
-                    DataStore.addPoint(newPoint);
+                    // Undo対応
+                    DataStore.addPoint(newPoint, true);
 
                     stateManager.setState({
                         selectedFeature: newPoint,
@@ -101,7 +114,9 @@ function showEditForm(point, renderData, x, y) {
                         name: name,
                         description: description,
                     });
-                    DataStore.updatePoint(point);
+
+                    // Undo対応
+                    DataStore.updatePoint(point, true);
 
                     stateManager.setState({
                         selectedFeature: point,
@@ -110,14 +125,16 @@ function showEditForm(point, renderData, x, y) {
                     });
                 }
 
+                // 再描画とフォーム閉じる
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
                 debugLog(1, `savePointButton のクリック時にエラー: ${error}`);
-                uiManager.showNotification('ポイントの保存中にエラーが発生しました。', 'error');
+                showNotification('ポイントの保存中にエラーが発生しました。', 'error');
             }
         };
 
+        // キャンセルボタン
         document.getElementById('cancelEditButton').onclick = () => {
             debugLog(4, 'cancelEditButton クリックイベントが発生しました。');
             try {
@@ -129,18 +146,20 @@ function showEditForm(point, renderData, x, y) {
             }
         };
 
+        // 削除ボタン
         document.getElementById('deletePointButton').onclick = () => {
             debugLog(4, 'deletePointButton クリックイベントが発生しました。');
             try {
                 if (point) {
-                    DataStore.removePoint(point.id);
+                    // Undo対応
+                    DataStore.removePoint(point.id, true);
                 }
                 stateManager.setState({ isDrawing: false, tempPoint: null });
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
                 debugLog(1, `deletePointButton のクリック時にエラー: ${error}`);
-                uiManager.showNotification('ポイントの削除中にエラーが発生しました。', 'error');
+                showNotification('ポイントの削除中にエラーが発生しました。', 'error');
             }
         };
 
@@ -150,9 +169,15 @@ function showEditForm(point, renderData, x, y) {
 }
 
 /**
- * ライン編集フォーム
+ * ライン編集フォームを表示
+ * @param {Object} line - ラインオブジェクト
+ * @param {Function} renderData - 再描画関数
+ * @param {Boolean} isNewLine - 新規ライン作成かどうか
+ * @param {Boolean} showDeleteButton - 削除ボタンを表示するか
+ * @param {Number} [x] - クリック座標(pageX)
+ * @param {Number} [y] - クリック座標(pageY)
  */
-function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton = false, x, y) {
+export function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton = false, x, y) {
     debugLog(4, 'showLineEditForm() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
@@ -193,6 +218,7 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
             document.getElementById('lineYear').value = properties.year !== undefined ? properties.year : '';
         }
 
+        // 保存ボタン
         document.getElementById('saveLineButton').onclick = () => {
             debugLog(4, 'saveLineButton クリックイベントが発生しました。');
             try {
@@ -202,7 +228,7 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                 const year = parseInt(yearValue, 10);
 
                 if (isNaN(year)) {
-                    uiManager.showNotification('年を正しく入力してください。', 'error');
+                    showNotification('年を正しく入力してください。', 'error');
                     return;
                 }
 
@@ -215,7 +241,8 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                     description: description,
                 });
 
-                DataStore.updateLine(line);
+                // UpdateLineはUndo可能に
+                DataStore.updateLine(line, true);
 
                 stateManager.setState({
                     isDrawing: false,
@@ -227,10 +254,11 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                 form.style.display = 'none';
             } catch (error) {
                 debugLog(1, `saveLineButton のクリック時にエラー: ${error}`);
-                uiManager.showNotification('ラインの保存中にエラーが発生しました。', 'error');
+                showNotification('ラインの保存中にエラーが発生しました。', 'error');
             }
         };
 
+        // キャンセルボタン
         document.getElementById('cancelLineEditButton').onclick = () => {
             debugLog(4, 'cancelLineEditButton クリックイベントが発生しました。');
             try {
@@ -241,7 +269,8 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
                     tempPoint: null,
                 });
                 if (isNewLine) {
-                    DataStore.removeLine(line.id);
+                    // 新規作成直後にキャンセル -> 追加済みラインを取り消す
+                    DataStore.removeLine(line.id, true);
                 }
                 renderData();
             } catch (error) {
@@ -254,16 +283,18 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
         deleteButton.onclick = () => {
             debugLog(4, 'deleteLineButton クリックイベントが発生しました。');
             try {
-                DataStore.removeLine(line.id);
+                // Undo可能に
+                DataStore.removeLine(line.id, true);
                 stateManager.setState({
                     isDrawing: false,
                     tempLinePoints: [],
+                    selectedFeature: null
                 });
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
                 debugLog(1, `deleteLineButton のクリック時にエラー: ${error}`);
-                uiManager.showNotification('ラインの削除中にエラーが発生しました。', 'error');
+                showNotification('ラインの削除中にエラーが発生しました。', 'error');
             }
         };
 
@@ -273,9 +304,15 @@ function showLineEditForm(line, renderData, isNewLine = false, showDeleteButton 
 }
 
 /**
- * ポリゴン編集フォーム
+ * ポリゴン編集フォームを表示
+ * @param {Object} polygon - ポリゴンオブジェクト
+ * @param {Function} renderData - 再描画関数
+ * @param {Boolean} isNewPolygon - 新規作成かどうか
+ * @param {Boolean} showDeleteButton - 削除ボタンを表示するか
+ * @param {Number} [x] - クリック座標(pageX)
+ * @param {Number} [y] - クリック座標(pageY)
  */
-function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDeleteButton = false, x, y) {
+export function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDeleteButton = false, x, y) {
     debugLog(4, 'showPolygonEditForm() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
@@ -301,6 +338,7 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
         const state = stateManager.getState();
         const currentYear = state.currentYear || 0;
 
+        // 既存プロパティが無い場合は初期入力
         if (!polygon.properties || polygon.properties.length === 0) {
             document.getElementById('polygonName').value = polygon.name || '';
             document.getElementById('polygonDescription').value = polygon.description || '';
@@ -316,6 +354,7 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
             document.getElementById('polygonYear').value = properties.year !== undefined ? properties.year : '';
         }
 
+        // 保存ボタン
         document.getElementById('savePolygonButton').onclick = () => {
             debugLog(4, 'savePolygonButton クリックイベントが発生しました。');
             try {
@@ -325,7 +364,7 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                 const year = parseInt(yearValue, 10);
 
                 if (isNaN(year)) {
-                    uiManager.showNotification('年を正しく入力してください。', 'error');
+                    showNotification('年を正しく入力してください。', 'error');
                     return;
                 }
 
@@ -338,7 +377,7 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                     description: description,
                 });
 
-                DataStore.updatePolygon(polygon);
+                DataStore.updatePolygon(polygon, true);
 
                 stateManager.setState({
                     isDrawing: false,
@@ -350,10 +389,11 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                 form.style.display = 'none';
             } catch (error) {
                 debugLog(1, `savePolygonButton のクリック時にエラー: ${error}`);
-                uiManager.showNotification('ポリゴンの保存中にエラーが発生しました。', 'error');
+                showNotification('ポリゴンの保存中にエラーが発生しました。', 'error');
             }
         };
 
+        // キャンセルボタン
         document.getElementById('cancelPolygonEditButton').onclick = () => {
             debugLog(4, 'cancelPolygonEditButton クリックイベントが発生しました。');
             try {
@@ -364,7 +404,8 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
                     tempPoint: null,
                 });
                 if (isNewPolygon) {
-                    DataStore.removePolygon(polygon.id);
+                    // 新規作成直後にキャンセル -> 追加済みポリゴンを取り消す
+                    DataStore.removePolygon(polygon.id, true);
                 }
                 renderData();
             } catch (error) {
@@ -372,21 +413,24 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
             }
         };
 
+        // 削除ボタン
         const deleteButton = document.getElementById('deletePolygonButton');
         deleteButton.style.display = showDeleteButton ? 'inline-block' : 'none';
         deleteButton.onclick = () => {
             debugLog(4, 'deletePolygonButton クリックイベントが発生しました。');
             try {
-                DataStore.removePolygon(polygon.id);
+                // Undo対応
+                DataStore.removePolygon(polygon.id, true);
                 stateManager.setState({
                     isDrawing: false,
                     tempPolygonPoints: [],
+                    selectedFeature: null
                 });
                 renderData();
                 form.style.display = 'none';
             } catch (error) {
                 debugLog(1, `deletePolygonButton のクリック時にエラー: ${error}`);
-                uiManager.showNotification('ポリゴンの削除中にエラーが発生しました。', 'error');
+                showNotification('ポリゴンの削除中にエラーが発生しました。', 'error');
             }
         };
 
@@ -396,12 +440,12 @@ function showPolygonEditForm(polygon, renderData, isNewPolygon = false, showDele
 }
 
 /**
- * 詳細ウィンドウ
- * @param {Object} data - フィーチャーデータ(名前・説明など)
- * @param {Number} [x] - クリック座標(pageX)
- * @param {Number} [y] - クリック座標(pageY)
+ * 詳細ウィンドウ（オブジェクトの簡易情報表示用）
+ * @param {Object} data - フィーチャーデータ(名前や年など)
+ * @param {Number} [x] - マウスクリック座標(pageX)
+ * @param {Number} [y] - マウスクリック座標(pageY)
  */
-function showDetailWindow(data, x, y) {
+export function showDetailWindow(data, x, y) {
     debugLog(4, 'showDetailWindow() が呼び出されました。');
     try {
         if (stateManager.getState().debugMode) {
@@ -438,8 +482,10 @@ function showDetailWindow(data, x, y) {
 
 /**
  * 簡易通知メッセージ
+ * @param {string} message - 通知メッセージ
+ * @param {string} [type='info'] - 通知タイプ(info, error, warningなど)
  */
-function showNotification(message, type = 'info') {
+export function showNotification(message, type = 'info') {
     debugLog(4, `showNotification() が呼び出されました。message=${message}, type=${type}`);
     try {
         if (stateManager.getState().debugMode) {
@@ -465,6 +511,7 @@ function showNotification(message, type = 'info') {
 
 /**
  * ダイアログやフォーム要素をドラッグ可能にする共通関数
+ * @param {HTMLElement} element - ドラッグ対象のDOM要素
  */
 function makeDraggable(element) {
     debugLog(4, 'makeDraggable() が呼び出されました。');
@@ -530,11 +577,3 @@ function makeDraggable(element) {
         debugLog(1, `makeDraggable() でエラー発生: ${error}`);
     }
 }
-
-export {
-    showEditForm,
-    showLineEditForm,
-    showPolygonEditForm,
-    showDetailWindow,
-    showNotification
-};
