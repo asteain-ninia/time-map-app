@@ -227,7 +227,7 @@ function vertexDragStarted(event, dData, offsetX, feature) {
  * 頂点ドラッグ中
  */
 function vertexDragged(event, dData) {
-    debugLog(4, `vertexDragged() が呼び出されました。`);
+    debugLog(4, 'vertexDragged() が呼び出されました。');
     try {
         dData._dragged = true;
         if (!isDraggingFeature) return;
@@ -336,6 +336,8 @@ function vertexDragEnded(event, dData, feature) {
 
 /**
  * エッジドラッグ開始 (新頂点挿入)
+ * 修正ポイント: 頂点追加前の状態を dragOriginalShape に保存し、
+ * Undo の際に頂点追加自体を取り消せるようにする。
  */
 function edgeDragStarted(event, dData, offsetX, feature) {
     debugLog(4, `edgeDragStarted() が呼び出されました。feature.id=${feature?.id}, offsetX=${offsetX}`);
@@ -354,6 +356,9 @@ function edgeDragStarted(event, dData, offsetX, feature) {
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
 
+        // 頂点追加前の状態を保存する
+        dragOriginalShape = JSON.parse(JSON.stringify(feature));
+
         // 新頂点を挿入
         const newX = dData.dragStartX;
         const newY = dData.dragStartY;
@@ -363,11 +368,9 @@ function edgeDragStarted(event, dData, offsetX, feature) {
             feature.id = Date.now() + Math.random();
         }
 
-        // ドラッグ開始時点での形状を保存
-        dragOriginalShape = JSON.parse(JSON.stringify(feature));
         isDraggingFeature = true;
 
-        // ここでいったん更新（shouldRecord=false）
+        // ここでいったん更新（recordはしない）
         const st = stateManager.getState();
         if (st.currentTool === 'lineVertexEdit') {
             DataStore.updateLine(feature, false);
@@ -390,7 +393,7 @@ function edgeDragStarted(event, dData, offsetX, feature) {
  * エッジドラッグ中
  */
 function edgeDragged(event, dData) {
-    debugLog(4, `edgeDragged() が呼び出されました。`);
+    debugLog(4, 'edgeDragged() が呼び出されました。');
     try {
         if (!isDraggingFeature) return;
         dData._dragged = true;
@@ -538,7 +541,8 @@ function removeSelectedVertices() {
         // Undo記録
         // "beforeObj" -> "selectedFeature" (削除後)
         // もし頂点が0個になりオブジェクト自体削除されたなら "after" はnull
-        const stillExists = (st.currentTool === 'lineVertexEdit') ? DataStore.getLines(st.currentYear).find(l => l.id === beforeObj.id)
+        const stillExists = (st.currentTool === 'lineVertexEdit')
+            ? DataStore.getLines(st.currentYear).find(l => l.id === beforeObj.id)
             : DataStore.getPolygons(st.currentYear).find(pg => pg.id === beforeObj.id);
         const afterObj = stillExists ? JSON.parse(JSON.stringify(selectedFeature)) : null;
 
