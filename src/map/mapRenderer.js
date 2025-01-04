@@ -30,6 +30,54 @@ let zoom;
 let MapModuleDataStore;
 
 /**
+ * カラーや太さなどを一括管理するオブジェクト
+ */
+const colorScheme = {
+    // 点データ
+    pointFill: 'red',
+
+    // ラインデータ
+    lineStroke: 'blue',
+
+    // ポリゴンデータ
+    polygonStroke: 'green',
+    polygonFill: 'rgba(0,255,0,0.3)',
+
+    // ハイライト（選択中）の枠線やポイント色
+    highlightStroke: 'orange',
+    highlightStrokeWidth: 4,
+    highlightPointFill: 'magenta',
+
+    // 頂点ハンドルの色 (通常 / 選択)
+    vertexNormal: 'greenyellow',
+    vertexSelected: 'magenta',
+
+    // エッジハンドルの色
+    edgeHandleFill: 'yellow',
+
+    // 一時オブジェクト（描画中）の色
+    tempLineStroke: 'orange',
+    tempPolygonStroke: 'orange',
+    tempPolygonFill: 'rgba(255,165,0,0.3)',
+    tempPointFill: 'orange',
+};
+
+/**
+ * 現在のズーム係数を取得するヘルパー
+ * @returns {number} 現在のズーム係数 (k)
+ */
+function getCurrentZoomScale() {
+    try {
+        if (!svg) return 1;
+        const transform = d3.zoomTransform(svg.node());
+        return transform.k || 1;
+    } catch (error) {
+        debugLog(1, `getCurrentZoomScale() でエラー発生: ${error}`);
+        return 1;
+    }
+}
+
+/**
  * 地図を読み込み、マップを横方向に複製
  */
 function loadMap(_DataStore, _UI, renderDataFunc) {
@@ -50,6 +98,7 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
                     .scaleExtent([1, 50])
                     .on('zoom', (event) => {
                         try {
+                            // ズームイベント
                             if (stateManager.getState().debugMode) {
                                 console.info('ズームイベントが発生しました。');
                             }
@@ -58,6 +107,9 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
                             if (dx > 0) dx -= mapWidth * k;
 
                             zoomGroup.attr('transform', `translate(${dx}, ${y}) scale(${k})`);
+
+                            // ズーム操作のたびに再描画
+                            renderDataFunc();
                         } catch (error) {
                             debugLog(1, `ズームイベント中にエラー発生: ${error}`);
                         }
@@ -90,9 +142,11 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
                             mapGroup.node().appendChild(mapClone);
                         }
 
-                        svg.attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
+                        svg
+                            .attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
                             .attr('preserveAspectRatio', 'xMidYMid meet');
 
+                        // 初期レンダリング
                         renderDataFunc();
 
                         if (stateManager.getState().debugMode) {
@@ -118,8 +172,6 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
         });
     } catch (error) {
         debugLog(1, `loadMap() 外枠でエラー発生: ${error}`);
-        // ここでは return しないまま、内部の Promise も正しく機能しないため
-        // 必要なら `return Promise.reject(error)` などの処理をしても良い
         return Promise.reject(error);
     }
 }
@@ -132,6 +184,7 @@ function renderData() {
     try {
         const st = stateManager.getState();
 
+        // すでに描画されている要素をクリア
         zoomGroup.selectAll('.data-group').remove();
         zoomGroup.selectAll('.temp-feature-group').remove();
 
@@ -154,8 +207,13 @@ function renderData() {
         lines = lines.filter(l => l.points && l.points.length >= 2);
         polygons = polygons.filter(pg => pg.points && pg.points.length >= 3);
 
+        // 2点ポリゴン(ほぼライン)をlinesに加える
         lines.push(...polygonsToLine.map(pg => ({ ...pg, originalLine: pg.originalPolygon || pg })));
 
+        // ズーム係数
+        const k = getCurrentZoomScale();
+
+        // 複数のコピー（-2, -1, 0, 1, 2）を合成
         const mapCopies = [-2, -1, 0, 1, 2];
 
         function duplicateFeature(feature, offsetX) {
@@ -169,7 +227,7 @@ function renderData() {
                 return duplicated;
             } catch (error) {
                 debugLog(1, `duplicateFeature() でエラー発生: ${error}`);
-                return feature; // エラー時はそのまま返しておく
+                return feature; // エラー時はそのまま返す
             }
         }
 
@@ -208,12 +266,19 @@ function renderData() {
             attributes: {
                 d: d => {
                     if (!d.points || d.points.length < 3) return null;
-                    return d3.line().x(p => p.x).y(p => p.y).curve(d3.curveLinearClosed)(d.points);
+                    return d3.line()
+                        .x(p => p.x)
+                        .y(p => p.y)
+                        .curve(d3.curveLinearClosed)(d.points);
                 },
-                stroke: 'green',
+                // stroke-widthは固定し、vector-effect: non-scaling-stroke で拡大・縮小を防ぐ
+                stroke: colorScheme.polygonStroke,
                 'stroke-width': 2,
-                fill: 'rgba(0,255,0,0.3)',
+                fill: colorScheme.polygonFill,
                 'pointer-events': 'all'
+            },
+            style: {
+                'vector-effect': 'non-scaling-stroke'
             },
             eventHandlers: {
                 mouseover: (event, d) => tooltips.showTooltip(event, d),
@@ -247,7 +312,7 @@ function renderData() {
                     }
                 }
             }
-        });
+        }, k);
 
         // ライン描画
         drawFeatures(dataGroup, {
@@ -257,12 +322,17 @@ function renderData() {
             attributes: {
                 d: d => {
                     if (!d.points || d.points.length < 2) return null;
-                    return d3.line().x(p => p.x).y(p => p.y)(d.points);
+                    return d3.line()
+                        .x(p => p.x)
+                        .y(p => p.y)(d.points);
                 },
-                stroke: 'blue',
+                stroke: colorScheme.lineStroke,
                 'stroke-width': 2,
                 fill: 'none',
                 'pointer-events': 'all'
+            },
+            style: {
+                'vector-effect': 'non-scaling-stroke'
             },
             eventHandlers: {
                 mouseover: (event, d) => tooltips.showTooltip(event, d),
@@ -296,7 +366,7 @@ function renderData() {
                     }
                 }
             }
-        });
+        }, k);
 
         // ポイント描画
         drawFeatures(dataGroup, {
@@ -306,9 +376,11 @@ function renderData() {
             attributes: {
                 cx: d => d.points[0].x,
                 cy: d => d.points[0].y,
-                r: 5,
-                fill: 'red',
+                fill: colorScheme.pointFill,
                 'pointer-events': 'all'
+            },
+            style: {
+                'vector-effect': 'non-scaling-stroke'
             },
             eventHandlers: {
                 mouseover: (event, d) => tooltips.showTooltip(event, d),
@@ -344,14 +416,13 @@ function renderData() {
                     }
                 }
             }
-        });
+        }, k, /* isPointCircle= */ true);
 
         // 作図中の一時オブジェクト描画
         if (st.isDrawing) {
             drawTemporaryFeatures(st);
         }
 
-        // 単頂点ポイントの頂点ハンドル (pointMoveTool)
         const selectedFeature = st.selectedFeature;
         if (
             st.isEditMode &&
@@ -363,7 +434,6 @@ function renderData() {
             drawVertexHandles(dataGroup, selectedFeature);
         }
 
-        // ライン/ポリゴン頂点編集
         if (
             st.isEditMode &&
             (st.currentTool === 'lineVertexEdit' || st.currentTool === 'polygonVertexEdit') &&
@@ -379,8 +449,12 @@ function renderData() {
 
 /**
  * 汎用的にフィーチャを描画
+ * @param {D3Selection} container - 親コンテナ
+ * @param {Object} options
+ * @param {number} k - ズーム係数
+ * @param {boolean} [isPointCircle=false] - 円を描画するポイントかどうか（半径を調整するため）
  */
-function drawFeatures(container, { data, className, elementType, attributes, eventHandlers }) {
+function drawFeatures(container, { data, className, elementType, attributes, style, eventHandlers }, k, isPointCircle = false) {
     try {
         debugLog(4, `drawFeatures() が呼び出されました。className=${className}`);
         const selection = container.selectAll(`.${className}`)
@@ -395,45 +469,61 @@ function drawFeatures(container, { data, className, elementType, attributes, eve
             .append(elementType)
             .attr('class', className);
 
+        // 属性・イベントの設定
         enterSelection.each(function (d) {
-            try {
-                const element = d3.select(this);
-                for (const [attrName, attrValue] of Object.entries(attributes)) {
-                    if (typeof attrValue === 'function') {
-                        element.attr(attrName, attrValue(d));
-                    } else {
-                        element.attr(attrName, attrValue);
-                    }
+            const element = d3.select(this);
+
+            // SVGの属性を設定
+            for (const [attrName, attrValue] of Object.entries(attributes)) {
+                if (typeof attrValue === 'function') {
+                    element.attr(attrName, attrValue(d));
+                } else {
+                    element.attr(attrName, attrValue);
                 }
-                for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
-                    element.on(eventName, eventHandler);
+            }
+            // スタイル設定
+            if (style) {
+                for (const [styleName, styleValue] of Object.entries(style)) {
+                    element.style(styleName, styleValue);
                 }
-            } catch (innerError) {
-                debugLog(1, `drawFeatures enterSelection.each() でエラー発生: ${innerError}`);
+            }
+            // イベントハンドラ設定
+            for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
+                element.on(eventName, eventHandler);
             }
         });
 
+        // 更新処理
         selection.each(function (d) {
-            try {
-                const element = d3.select(this);
-                for (const [attrName, attrValue] of Object.entries(attributes)) {
-                    if (typeof attrValue === 'function') {
-                        element.attr(attrName, attrValue(d));
-                    } else {
-                        element.attr(attrName, attrValue);
-                    }
+            const element = d3.select(this);
+
+            for (const [attrName, attrValue] of Object.entries(attributes)) {
+                if (typeof attrValue === 'function') {
+                    element.attr(attrName, attrValue(d));
+                } else {
+                    element.attr(attrName, attrValue);
                 }
-                for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
-                    element.on(eventName, eventHandler);
+            }
+            if (style) {
+                for (const [styleName, styleValue] of Object.entries(style)) {
+                    element.style(styleName, styleValue);
                 }
-            } catch (innerError) {
-                debugLog(1, `drawFeatures selection.each() でエラー発生: ${innerError}`);
+            }
+            for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
+                element.on(eventName, eventHandler);
             }
         });
+
+        // 半径をズーム比で調整 (isPointCircleのみ)
+        if (isPointCircle) {
+            selection.merge(enterSelection)
+                // もともと 20 / k
+                .attr('r', 20 / k);
+        }
 
         selection.exit().remove();
 
-        // 選択中フィーチャをハイライト
+        // 選択中フィーチャをハイライト（ライン/ポリゴン/ポイント）
         const st = stateManager.getState();
         if (st.selectedFeature && st.selectedFeature.id) {
             container.selectAll(`.${className}`)
@@ -442,9 +532,13 @@ function drawFeatures(container, { data, className, elementType, attributes, eve
                     try {
                         const element = d3.select(this);
                         if (className === 'line' || className === 'polygon') {
-                            element.attr('stroke', 'orange').attr('stroke-width', 4);
+                            element
+                                .attr('stroke', colorScheme.highlightStroke)
+                                .attr('stroke-width', colorScheme.highlightStrokeWidth)
+                                .style('vector-effect', 'non-scaling-stroke');
                         } else if (className === 'point') {
-                            element.attr('fill', 'magenta');
+                            // 円の塗り色
+                            element.attr('fill', colorScheme.highlightPointFill);
                         }
                     } catch (innerError) {
                         debugLog(1, `drawFeatures ハイライト処理中にエラー: ${innerError}`);
@@ -470,6 +564,8 @@ function drawTemporaryFeatures(state) {
         }
 
         const mapCopies = [-1, 0, 1, 2];
+        const k = getCurrentZoomScale();
+
         mapCopies.forEach(offset => {
             try {
                 const offsetX = offset * mapWidth;
@@ -483,9 +579,10 @@ function drawTemporaryFeatures(state) {
                             d: d => d3.line().x(p => p.x).y(p => p.y)(d)
                         },
                         style: {
-                            stroke: 'orange',
+                            stroke: colorScheme.tempLineStroke,
                             'stroke-width': 2,
-                            fill: 'none'
+                            fill: 'none',
+                            'vector-effect': 'non-scaling-stroke'
                         }
                     });
                     drawTemporaryFeature(tempGroup, {
@@ -495,8 +592,11 @@ function drawTemporaryFeatures(state) {
                         attributes: {
                             cx: d => d.x,
                             cy: d => d.y,
-                            r: 5,
-                            fill: 'orange'
+                            r: 20 / k,
+                            fill: colorScheme.tempPointFill
+                        },
+                        style: {
+                            'vector-effect': 'non-scaling-stroke'
                         }
                     });
                 } else if (state.currentTool === 'polygon' && state.tempPolygonPoints && state.tempPolygonPoints.length > 0) {
@@ -509,9 +609,10 @@ function drawTemporaryFeatures(state) {
                             d: d => d3.line().x(p => p.x).y(p => p.y).curve(d3.curveLinearClosed)(d)
                         },
                         style: {
-                            stroke: 'orange',
+                            stroke: colorScheme.tempPolygonStroke,
                             'stroke-width': 2,
-                            fill: 'rgba(255,165,0,0.3)'
+                            fill: colorScheme.tempPolygonFill,
+                            'vector-effect': 'non-scaling-stroke'
                         }
                     });
                     drawTemporaryFeature(tempGroup, {
@@ -521,8 +622,11 @@ function drawTemporaryFeatures(state) {
                         attributes: {
                             cx: d => d.x,
                             cy: d => d.y,
-                            r: 5,
-                            fill: 'orange'
+                            r: 20 / k,
+                            fill: colorScheme.tempPointFill
+                        },
+                        style: {
+                            'vector-effect': 'non-scaling-stroke'
                         }
                     });
                 } else if (state.currentTool === 'point' && state.tempPoint) {
@@ -534,8 +638,11 @@ function drawTemporaryFeatures(state) {
                         attributes: {
                             cx: d => d.x,
                             cy: d => d.y,
-                            r: 5,
-                            fill: 'orange'
+                            r: 20 / k,
+                            fill: colorScheme.tempPointFill
+                        },
+                        style: {
+                            'vector-effect': 'non-scaling-stroke'
                         }
                     });
                 }
@@ -558,19 +665,23 @@ function drawTemporaryFeature(group, { data, className, elementType, attributes,
             .append(elementType)
             .attr('class', className);
 
-        if (elementType === 'path') {
-            elements.attr('d', d => attributes.d(d));
-        } else {
+        elements.each(function (d) {
+            const el = d3.select(this);
+            // 属性設定
             for (const [attrName, attrValue] of Object.entries(attributes)) {
-                elements.attr(attrName, typeof attrValue === 'function' ? (dd => attrValue(dd)) : attrValue);
+                if (typeof attrValue === 'function') {
+                    el.attr(attrName, attrValue(d));
+                } else {
+                    el.attr(attrName, attrValue);
+                }
             }
-        }
-
-        if (style) {
-            for (const [styleName, styleValue] of Object.entries(style)) {
-                elements.style(styleName, styleValue);
+            // スタイル設定
+            if (style) {
+                for (const [styleName, styleValue] of Object.entries(style)) {
+                    el.style(styleName, styleValue);
+                }
             }
-        }
+        });
     } catch (error) {
         debugLog(1, `drawTemporaryFeature() でエラー発生 (className=${className}): ${error}`);
     }
@@ -591,6 +702,7 @@ function drawVertexHandles(dataGroup, feature) {
 
         const st = stateManager.getState();
         const selectedVertices = st.selectedVertices || [];
+        const k = getCurrentZoomScale();
 
         const offsetXValues = [-2, -1, 0, 1, 2].map(offset => offset * mapWidth);
         offsetXValues.forEach(offsetX => {
@@ -612,14 +724,20 @@ function drawVertexHandles(dataGroup, feature) {
                     .attr('class', `vertex-handle vertex-handle-${offsetXClass}`)
                     .attr('cx', d => d.x)
                     .attr('cy', d => d.y)
-                    .attr('r', 5)
+                    .attr('r', d => {
+                        const isSelected = selectedVertices.some(
+                            v => v.featureId === feature.id && v.vertexIndex === d.index
+                        );
+                        return isSelected ? 28 / k : 20 / k;  // 選択頂点はやや大きく
+                    })
                     .attr('fill', d => {
                         const isSelected = selectedVertices.some(
                             v => v.featureId === feature.id && v.vertexIndex === d.index
                         );
-                        return isSelected ? 'magenta' : 'orange';
+                        return isSelected ? colorScheme.vertexSelected : colorScheme.vertexNormal;
                     })
                     .style('pointer-events', 'all')
+                    .style('vector-effect', 'non-scaling-stroke')
                     .call(d3.drag()
                         .on('start', (event, dData) => {
                             vertexDragStarted(event, dData, offsetX, feature);
@@ -662,7 +780,9 @@ function drawEdgeHandles(dataGroup, feature) {
             return;
         }
 
+        const k = getCurrentZoomScale();
         const offsetXValues = [-2, -1, 0, 1, 2].map(offset => offset * mapWidth);
+
         offsetXValues.forEach(offsetX => {
             try {
                 const adjustedFeature = { ...feature };
@@ -694,9 +814,10 @@ function drawEdgeHandles(dataGroup, feature) {
                     .attr('class', `edge-handle edge-handle-${offsetXClass}`)
                     .attr('cx', d => d.x)
                     .attr('cy', d => d.y)
-                    .attr('r', 4)
-                    .attr('fill', 'yellow')
+                    .attr('r', 16 / k)
+                    .attr('fill', colorScheme.edgeHandleFill)
                     .style('pointer-events', 'all')
+                    .style('vector-effect', 'non-scaling-stroke')
                     .call(d3.drag()
                         .on('start', (event, dData) => {
                             edgeDragStarted(event, dData, offsetX, feature);
