@@ -874,11 +874,17 @@ function getMapHeight() {
     }
 }
 
+function setZoomScaleExtent(min, max) {
+    if (!zoom) return;
+    zoom.scaleExtent([min, max]);
+}
+
 export {
     loadMap,
     renderData,
     getMapWidth,
     getMapHeight,
     disableMapZoom,
-    enableMapZoom
+    enableMapZoom,
+    setZoomScaleExtent,
 };

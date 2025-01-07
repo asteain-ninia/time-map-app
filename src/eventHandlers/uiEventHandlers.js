@@ -4,7 +4,7 @@ import stateManager from '../state/index.js';
 import uiManager from '../ui/uiManager.js';
 import { showEditForm, showLineEditForm, showPolygonEditForm } from '../ui/forms.js';
 import { removeSelectedVertices } from '../map/mapInteraction.js';
-import { getMapWidth } from '../map/mapRenderer.js';
+import { getMapWidth, setZoomScaleExtent } from '../map/mapRenderer.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import UndoRedoManager from '../utils/undoRedoManager.js';
@@ -312,6 +312,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
+        // ★ 年スライダー (timeSlider) の変更を即時反映
         const timeSlider = document.getElementById('timeSlider');
         const currentYearDisplay = document.getElementById('currentYear');
         timeSlider.addEventListener('input', () => {
@@ -326,44 +327,99 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
-        document.getElementById('updateSliderButton').addEventListener('click', () => {
-            debugLog(4, 'updateSliderButton クリックイベントが発生しました。');
+        // ★ スライダー最小/最大値 (sliderMin / sliderMax) の自動反映
+        const sliderMinInput = document.getElementById('sliderMin');
+        const sliderMaxInput = document.getElementById('sliderMax');
+        sliderMinInput.addEventListener('input', () => {
+            debugLog(4, 'sliderMin inputイベントが発生しました。');
             try {
-                const min = parseInt(document.getElementById('sliderMin').value, 10);
-                const max = parseInt(document.getElementById('sliderMax').value, 10);
-                if (isNaN(min) || isNaN(max) || min >= max) {
-                    showNotification('最小値と最大値を正しく入力してください。', 'error');
-                    return;
+                const val = parseInt(sliderMinInput.value, 10);
+                if (isNaN(val)) return;
+                const st = stateManager.getState();
+                // min < max の確認などは適宜
+                if (val < st.sliderMax) {
+                    stateManager.setState({ sliderMin: val });
+                    // スライダーを更新し、現在年を再描画
+                    uiManager.updateSlider();
+                    renderData();
                 }
-                stateManager.setState({
-                    sliderMin: min,
-                    sliderMax: max,
-                    currentYear: Math.max(state.currentYear, min),
-                });
-                uiManager.updateSlider();
-                renderData();
             } catch (error) {
-                debugLog(1, `updateSliderButton のクリックイベントでエラー: ${error}`);
-                showNotification('スライダーの更新中にエラーが発生しました。', 'error');
+                debugLog(1, `sliderMin input中にエラー: ${error}`);
+            }
+        });
+        sliderMaxInput.addEventListener('input', () => {
+            debugLog(4, 'sliderMax inputイベントが発生しました。');
+            try {
+                const val = parseInt(sliderMaxInput.value, 10);
+                if (isNaN(val)) return;
+                const st = stateManager.getState();
+                if (val > st.sliderMin) {
+                    stateManager.setState({ sliderMax: val });
+                    uiManager.updateSlider();
+                    renderData();
+                }
+            } catch (error) {
+                debugLog(1, `sliderMax input中にエラー: ${error}`);
             }
         });
 
-        document.getElementById('saveWorldSettingsButton').addEventListener('click', () => {
-            debugLog(4, 'saveWorldSettingsButton クリックイベントが発生しました。');
+        // ★ ズーム倍率最小/最大 (zoomMin / zoomMax) の自動反映
+        const zoomMinInput = document.getElementById('zoomMin');
+        const zoomMaxInput = document.getElementById('zoomMax');
+        zoomMinInput.addEventListener('input', () => {
+            debugLog(4, 'zoomMin inputイベントが発生しました。');
             try {
-                const name = document.getElementById('worldName').value;
-                const description = document.getElementById('worldDescription').value;
-                stateManager.setState({
-                    worldName: name,
-                    worldDescription: description,
-                });
+                const val = parseFloat(zoomMinInput.value);
+                if (isNaN(val) || val <= 0) return;
+                const st = stateManager.getState();
+                // min < max
+                if (val < st.zoomMax) {
+                    stateManager.setState({ zoomMin: val });
+                    // setZoomScaleExtent でマップに即反映
+                    setZoomScaleExtent(val, st.zoomMax);
+                }
+            } catch (error) {
+                debugLog(1, `zoomMin input中にエラー: ${error}`);
+            }
+        });
+        zoomMaxInput.addEventListener('input', () => {
+            debugLog(4, 'zoomMax inputイベントが発生しました。');
+            try {
+                const val = parseFloat(zoomMaxInput.value);
+                if (isNaN(val) || val <= 0) return;
+                const st = stateManager.getState();
+                if (val > st.zoomMin) {
+                    stateManager.setState({ zoomMax: val });
+                    setZoomScaleExtent(st.zoomMin, val);
+                }
+            } catch (error) {
+                debugLog(1, `zoomMax input中にエラー: ${error}`);
+            }
+        });
+
+        // ★ 世界名・概要（worldName / worldDescription）も自動反映
+        const worldNameInput = document.getElementById('worldName');
+        const worldDescriptionInput = document.getElementById('worldDescription');
+        worldNameInput.addEventListener('input', () => {
+            try {
+                const val = worldNameInput.value;
+                stateManager.setState({ worldName: val });
                 uiManager.updateWorldInfo();
             } catch (error) {
-                debugLog(1, `saveWorldSettingsButton のクリックイベントでエラー: ${error}`);
-                showNotification('世界情報の保存中にエラーが発生しました。', 'error');
+                debugLog(1, `worldName input中にエラー: ${error}`);
+            }
+        });
+        worldDescriptionInput.addEventListener('input', () => {
+            try {
+                const val = worldDescriptionInput.value;
+                stateManager.setState({ worldDescription: val });
+                uiManager.updateWorldInfo();
+            } catch (error) {
+                debugLog(1, `worldDescription input中にエラー: ${error}`);
             }
         });
 
+        // 設定モーダル関連
         document.getElementById('settingsButton').addEventListener('click', () => {
             debugLog(4, 'settingsButton クリックイベントが発生しました。');
             try {

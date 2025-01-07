@@ -21,4 +21,6 @@ export const defaultState = {
     selectedFeature: null,        // 現在選択されているフィーチャー
     isDragging: false,            // ドラッグ中かどうか
     selectedVertices: [],
+    zoomMin: 1,
+    zoomMax: 50,
 };
