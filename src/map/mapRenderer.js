@@ -1,16 +1,6 @@
 // src/map/mapRenderer.js
 
 import stateManager from '../state/index.js';
-
-import {
-    vertexDragStarted,
-    vertexDragged,
-    vertexDragEnded,
-    edgeDragStarted,
-    edgeDragged,
-    edgeDragEnded
-} from './mapInteraction.js';
-
 import uiManager from '../ui/uiManager.js';
 import tooltips from '../ui/tooltips.js';
 import {
@@ -27,6 +17,7 @@ let mapWidth = 1000;
 let mapHeight = 800;
 let zoom;
 
+// DataStore への参照を保持（ロード後に使う）
 let MapModuleDataStore;
 
 /**
@@ -80,7 +71,7 @@ function getCurrentZoomScale() {
 /**
  * 地図を読み込み、マップを横方向に複製
  */
-function loadMap(_DataStore, _UI, renderDataFunc) {
+export function loadMap(_DataStore, _UI, renderDataFunc) {
     debugLog(4, 'loadMap() が呼び出されました。');
     try {
         return new Promise((resolve, reject) => {
@@ -94,11 +85,11 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
 
                 zoomGroup = svg.append('g');
 
+                // ズーム設定（最小1・最大50はデフォルト値）
                 zoom = d3.zoom()
                     .scaleExtent([1, 50])
                     .on('zoom', (event) => {
                         try {
-                            // ズームイベント
                             if (stateManager.getState().debugMode) {
                                 console.info('ズームイベントが発生しました。');
                             }
@@ -107,8 +98,6 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
                             if (dx > 0) dx -= mapWidth * k;
 
                             zoomGroup.attr('transform', `translate(${dx}, ${y}) scale(${k})`);
-
-                            // ズーム操作のたびに再描画
                             renderDataFunc();
                         } catch (error) {
                             debugLog(1, `ズームイベント中にエラー発生: ${error}`);
@@ -123,30 +112,40 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
                     try {
                         const mapSvg = xml.documentElement;
 
+                        // viewBoxを取得して、mapWidth / mapHeight を上書き
                         const viewBox = mapSvg.getAttribute('viewBox');
                         if (viewBox) {
-                            const viewBoxValues = viewBox.split(' ').map(Number);
-                            if (viewBoxValues.length === 4) {
-                                mapWidth = viewBoxValues[2];
-                                mapHeight = viewBoxValues[3];
-                            }
+                            const [, , w, h] = viewBox.split(' ').map(Number);
+                            mapWidth = w;
+                            mapHeight = h;
                         } else {
                             mapWidth = parseFloat(mapSvg.getAttribute('width')) || mapWidth;
                             mapHeight = parseFloat(mapSvg.getAttribute('height')) || mapHeight;
                         }
 
+                        // 地図を -2～2の範囲で複製し、無限スクロール感を出す
                         for (let i = -2; i <= 2; i++) {
+                            // 元のSVGを複製
                             const mapClone = mapSvg.cloneNode(true);
+
+                            // mapClone内の <path> 要素に fill-rule="evenodd" を付与
+                            const pathElems = mapClone.querySelectorAll('path');
+                            pathElems.forEach(pathEl => {
+                                pathEl.setAttribute('fill-rule', 'evenodd');
+                            });
+                            // これにより、穴を含むパスが正しく透過（穴抜き）される
+
                             const mapGroup = zoomGroup.append('g')
                                 .attr('transform', `translate(${i * mapWidth}, 0)`);
                             mapGroup.node().appendChild(mapClone);
                         }
 
+                        // ビュー設定
                         svg
                             .attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
                             .attr('preserveAspectRatio', 'xMidYMid meet');
 
-                        // 初期レンダリング
+                        // 初期表示
                         renderDataFunc();
 
                         if (stateManager.getState().debugMode) {
@@ -179,7 +178,7 @@ function loadMap(_DataStore, _UI, renderDataFunc) {
 /**
  * 全データを再描画
  */
-function renderData() {
+export function renderData() {
     debugLog(4, 'renderData() が呼び出されました。');
     try {
         const st = stateManager.getState();
@@ -838,7 +837,7 @@ function drawEdgeHandles(dataGroup, feature) {
     }
 }
 
-function disableMapZoom() {
+export function disableMapZoom() {
     try {
         debugLog(4, 'disableMapZoom() が呼び出されました。');
         svg.on('.zoom', null);
@@ -847,7 +846,7 @@ function disableMapZoom() {
     }
 }
 
-function enableMapZoom() {
+export function enableMapZoom() {
     try {
         debugLog(4, 'enableMapZoom() が呼び出されました。');
         svg.call(zoom);
@@ -856,35 +855,25 @@ function enableMapZoom() {
     }
 }
 
-function getMapWidth() {
+export function getMapWidth() {
     try {
         return mapWidth;
     } catch (error) {
         debugLog(1, `getMapWidth() でエラー発生: ${error}`);
-        return 1000; // デフォルト値
+        return 1000;
     }
 }
 
-function getMapHeight() {
+export function getMapHeight() {
     try {
         return mapHeight;
     } catch (error) {
         debugLog(1, `getMapHeight() でエラー発生: ${error}`);
-        return 800; // デフォルト値
+        return 800;
     }
 }
 
-function setZoomScaleExtent(min, max) {
+export function setZoomScaleExtent(min, max) {
     if (!zoom) return;
     zoom.scaleExtent([min, max]);
 }
-
-export {
-    loadMap,
-    renderData,
-    getMapWidth,
-    getMapHeight,
-    disableMapZoom,
-    enableMapZoom,
-    setZoomScaleExtent,
-};
