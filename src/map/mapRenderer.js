@@ -69,7 +69,10 @@ function getCurrentZoomScale() {
 }
 
 /**
- * 地図を読み込み、マップを横方向に複製
+ * 背景地図 (map.svg) を読み込み、横方向に複製して表示する関数
+ * @param {Object} _DataStore - データストア
+ * @param {Object} _UI - UIモジュール(使わないこともある)
+ * @param {Function} renderDataFunc - 地図の再描画関数
  */
 export function loadMap(_DataStore, _UI, renderDataFunc) {
     debugLog(4, 'loadMap() が呼び出されました。');
@@ -78,16 +81,18 @@ export function loadMap(_DataStore, _UI, renderDataFunc) {
             try {
                 MapModuleDataStore = _DataStore;
 
+                // #map の中に <svg> 要素を作成
                 svg = d3.select('#map')
                     .append('svg')
                     .attr('width', '100%')
                     .attr('height', '100%');
 
+                // ズーム用のグループ
                 zoomGroup = svg.append('g');
 
-                // ズーム設定（最小1・最大50はデフォルト値）
+                // ズーム設定
                 zoom = d3.zoom()
-                    .scaleExtent([1, 50])
+                    .scaleExtent([1, 50]) // デフォルト：最小1,最大50
                     .on('zoom', (event) => {
                         try {
                             if (stateManager.getState().debugMode) {
@@ -104,43 +109,61 @@ export function loadMap(_DataStore, _UI, renderDataFunc) {
                         }
                     });
 
+                // ズーム呼び出し
                 svg.call(zoom);
 
                 const mapSvgUrl = 'map.svg';
 
+                // SVGファイルを読み込み
                 d3.xml(mapSvgUrl).then((xml) => {
                     try {
                         const mapSvg = xml.documentElement;
 
-                        // viewBoxを取得して、mapWidth / mapHeight を上書き
+                        // viewBoxがあれば取得して mapWidth/mapHeight を上書き
                         const viewBox = mapSvg.getAttribute('viewBox');
                         if (viewBox) {
-                            const [, , w, h] = viewBox.split(' ').map(Number);
-                            mapWidth = w;
-                            mapHeight = h;
+                            const vbVals = viewBox.split(' ').map(Number);
+                            if (vbVals.length === 4) {
+                                mapWidth = vbVals[2];
+                                mapHeight = vbVals[3];
+                            }
                         } else {
-                            mapWidth = parseFloat(mapSvg.getAttribute('width')) || mapWidth;
-                            mapHeight = parseFloat(mapSvg.getAttribute('height')) || mapHeight;
+                            // それ以外の場合はwidth/height属性から取得
+                            const wAttr = parseFloat(mapSvg.getAttribute('width'));
+                            const hAttr = parseFloat(mapSvg.getAttribute('height'));
+                            if (!isNaN(wAttr)) mapWidth = wAttr;
+                            if (!isNaN(hAttr)) mapHeight = hAttr;
                         }
 
-                        // 地図を -2～2の範囲で複製し、無限スクロール感を出す
+                        // -2～2の範囲で地図を横に複製
                         for (let i = -2; i <= 2; i++) {
-                            // 元のSVGを複製
+                            // 元の <svg> 内の要素を複製
                             const mapClone = mapSvg.cloneNode(true);
 
-                            // mapClone内の <path> 要素に fill-rule="evenodd" を付与
-                            const pathElems = mapClone.querySelectorAll('path');
-                            pathElems.forEach(pathEl => {
-                                pathEl.setAttribute('fill-rule', 'evenodd');
-                            });
-                            // これにより、穴を含むパスが正しく透過（穴抜き）される
+                            mapClone.removeAttribute('width');
+                            mapClone.removeAttribute('height');
 
+                            // <style>を挿入して、すべての path に対して fill-rule & clip-rule=evenodd を強制
+                            const styleElement = xml.createElement('style');
+                            // fill-rule と clip-rule を同時に指定
+                            styleElement.textContent = `
+                                path {
+                                    fill-rule: evenodd !important;
+                                    clip-rule: evenodd !important;
+                                }
+                            `;
+                            // <svg>直下に挿入
+                            mapClone.insertBefore(styleElement, mapClone.firstChild);
+
+                            // g要素を作成して複製を貼り付け
                             const mapGroup = zoomGroup.append('g')
                                 .attr('transform', `translate(${i * mapWidth}, 0)`);
+
+                            // DOMで追加
                             mapGroup.node().appendChild(mapClone);
                         }
 
-                        // ビュー設定
+                        // この <svg> 自身にも viewBox を設定
                         svg
                             .attr('viewBox', `0 0 ${mapWidth} ${mapHeight}`)
                             .attr('preserveAspectRatio', 'xMidYMid meet');
@@ -176,7 +199,7 @@ export function loadMap(_DataStore, _UI, renderDataFunc) {
 }
 
 /**
- * 全データを再描画
+ * 地図上のオブジェクト（Points/Lines/Polygons）を再描画する
  */
 export function renderData() {
     debugLog(4, 'renderData() が呼び出されました。');
@@ -270,7 +293,6 @@ export function renderData() {
                         .y(p => p.y)
                         .curve(d3.curveLinearClosed)(d.points);
                 },
-                // stroke-widthは固定し、vector-effect: non-scaling-stroke で拡大・縮小を防ぐ
                 stroke: colorScheme.polygonStroke,
                 'stroke-width': 2,
                 fill: colorScheme.polygonFill,
@@ -468,11 +490,9 @@ function drawFeatures(container, { data, className, elementType, attributes, sty
             .append(elementType)
             .attr('class', className);
 
-        // 属性・イベントの設定
         enterSelection.each(function (d) {
             const element = d3.select(this);
-
-            // SVGの属性を設定
+            // 属性
             for (const [attrName, attrValue] of Object.entries(attributes)) {
                 if (typeof attrValue === 'function') {
                     element.attr(attrName, attrValue(d));
@@ -480,22 +500,20 @@ function drawFeatures(container, { data, className, elementType, attributes, sty
                     element.attr(attrName, attrValue);
                 }
             }
-            // スタイル設定
+            // スタイル
             if (style) {
                 for (const [styleName, styleValue] of Object.entries(style)) {
                     element.style(styleName, styleValue);
                 }
             }
-            // イベントハンドラ設定
+            // イベント
             for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
                 element.on(eventName, eventHandler);
             }
         });
 
-        // 更新処理
         selection.each(function (d) {
             const element = d3.select(this);
-
             for (const [attrName, attrValue] of Object.entries(attributes)) {
                 if (typeof attrValue === 'function') {
                     element.attr(attrName, attrValue(d));
@@ -513,16 +531,15 @@ function drawFeatures(container, { data, className, elementType, attributes, sty
             }
         });
 
-        // 半径をズーム比で調整 (isPointCircleのみ)
+        // ポイントなら半径を調整
         if (isPointCircle) {
             selection.merge(enterSelection)
-                // もともと 20 / k
                 .attr('r', 20 / k);
         }
 
         selection.exit().remove();
 
-        // 選択中フィーチャをハイライト（ライン/ポリゴン/ポイント）
+        // 選択中フィーチャをハイライト
         const st = stateManager.getState();
         if (st.selectedFeature && st.selectedFeature.id) {
             container.selectAll(`.${className}`)
@@ -536,11 +553,11 @@ function drawFeatures(container, { data, className, elementType, attributes, sty
                                 .attr('stroke-width', colorScheme.highlightStrokeWidth)
                                 .style('vector-effect', 'non-scaling-stroke');
                         } else if (className === 'point') {
-                            // 円の塗り色
+                            // 円をハイライト色に
                             element.attr('fill', colorScheme.highlightPointFill);
                         }
-                    } catch (innerError) {
-                        debugLog(1, `drawFeatures ハイライト処理中にエラー: ${innerError}`);
+                    } catch (err) {
+                        debugLog(1, `drawFeatures ハイライト処理中にエラー: ${err}`);
                     }
                 });
         }
@@ -550,11 +567,11 @@ function drawFeatures(container, { data, className, elementType, attributes, sty
 }
 
 /**
- * 作図中の一時オブジェクトを描画
+ * 作図中の一時オブジェクトを描画（tempLine, tempPolygon, tempPoint）
  */
 function drawTemporaryFeatures(state) {
+    debugLog(4, 'drawTemporaryFeatures() が呼び出されました。');
     try {
-        debugLog(4, 'drawTemporaryFeatures() が呼び出されました。');
         let tempGroup = zoomGroup.select('.temp-feature-group');
         if (tempGroup.empty()) {
             tempGroup = zoomGroup.append('g').attr('class', 'temp-feature-group');
@@ -566,16 +583,17 @@ function drawTemporaryFeatures(state) {
         const k = getCurrentZoomScale();
 
         mapCopies.forEach(offset => {
+            const offsetX = offset * mapWidth;
             try {
-                const offsetX = offset * mapWidth;
                 if (state.currentTool === 'line' && state.tempLinePoints && state.tempLinePoints.length > 0) {
                     const arr = state.tempLinePoints.map(p => ({ x: p.x + offsetX, y: p.y }));
+                    // ライン
                     drawTemporaryFeature(tempGroup, {
                         data: [arr],
                         className: `tempLine-${offset}`,
                         elementType: 'path',
                         attributes: {
-                            d: d => d3.line().x(p => p.x).y(p => p.y)(d)
+                            d: d => d3.line().x(pp => pp.x).y(pp => pp.y)(d)
                         },
                         style: {
                             stroke: colorScheme.tempLineStroke,
@@ -584,6 +602,7 @@ function drawTemporaryFeatures(state) {
                             'vector-effect': 'non-scaling-stroke'
                         }
                     });
+                    // 頂点（circle）
                     drawTemporaryFeature(tempGroup, {
                         data: arr,
                         className: `tempPoint-${offset}`,
@@ -600,12 +619,13 @@ function drawTemporaryFeatures(state) {
                     });
                 } else if (state.currentTool === 'polygon' && state.tempPolygonPoints && state.tempPolygonPoints.length > 0) {
                     const arr = state.tempPolygonPoints.map(p => ({ x: p.x + offsetX, y: p.y }));
+                    // ポリゴン path
                     drawTemporaryFeature(tempGroup, {
                         data: [arr],
                         className: `tempPolygon-${offset}`,
                         elementType: 'path',
                         attributes: {
-                            d: d => d3.line().x(p => p.x).y(p => p.y).curve(d3.curveLinearClosed)(d)
+                            d: d => d3.line().x(pp => pp.x).y(pp => pp.y).curve(d3.curveLinearClosed)(d)
                         },
                         style: {
                             stroke: colorScheme.tempPolygonStroke,
@@ -614,6 +634,7 @@ function drawTemporaryFeatures(state) {
                             'vector-effect': 'non-scaling-stroke'
                         }
                     });
+                    // 頂点（circle）
                     drawTemporaryFeature(tempGroup, {
                         data: arr,
                         className: `tempPoint-${offset}`,
@@ -655,8 +676,8 @@ function drawTemporaryFeatures(state) {
 }
 
 function drawTemporaryFeature(group, { data, className, elementType, attributes, style }) {
+    debugLog(4, `drawTemporaryFeature() が呼び出されました。className=${className}`);
     try {
-        debugLog(4, `drawTemporaryFeature() が呼び出されました。className=${className}`);
         const tempGroup = group.append('g').attr('class', 'temp-feature');
         const elements = tempGroup.selectAll(`.${className}`)
             .data(data)
@@ -666,7 +687,6 @@ function drawTemporaryFeature(group, { data, className, elementType, attributes,
 
         elements.each(function (d) {
             const el = d3.select(this);
-            // 属性設定
             for (const [attrName, attrValue] of Object.entries(attributes)) {
                 if (typeof attrValue === 'function') {
                     el.attr(attrName, attrValue(d));
@@ -674,7 +694,6 @@ function drawTemporaryFeature(group, { data, className, elementType, attributes,
                     el.attr(attrName, attrValue);
                 }
             }
-            // スタイル設定
             if (style) {
                 for (const [styleName, styleValue] of Object.entries(style)) {
                     el.style(styleName, styleValue);
@@ -690,8 +709,8 @@ function drawTemporaryFeature(group, { data, className, elementType, attributes,
  * ライン/ポリゴン頂点編集時の頂点ハンドル表示
  */
 function drawVertexHandles(dataGroup, feature) {
+    debugLog(4, `drawVertexHandles() が呼び出されました。feature.id=${feature?.id}`);
     try {
-        debugLog(4, `drawVertexHandles() が呼び出されました。feature.id=${feature?.id}`);
         if (!feature.id) {
             feature.id = Date.now() + Math.random();
         }
@@ -763,8 +782,8 @@ function drawVertexHandles(dataGroup, feature) {
  * ライン/ポリゴン頂点編集時のエッジハンドル描画
  */
 function drawEdgeHandles(dataGroup, feature) {
+    debugLog(4, `drawEdgeHandles() が呼び出されました。feature.id=${feature?.id}`);
     try {
-        debugLog(4, `drawEdgeHandles() が呼び出されました。feature.id=${feature?.id}`);
         if (!feature.points || feature.points.length <= 1) {
             return;
         }
@@ -837,6 +856,9 @@ function drawEdgeHandles(dataGroup, feature) {
     }
 }
 
+/**
+ * ズームを一時的に無効化する（頂点ドラッグなどの操作時に呼ばれる）
+ */
 export function disableMapZoom() {
     try {
         debugLog(4, 'disableMapZoom() が呼び出されました。');
@@ -846,6 +868,9 @@ export function disableMapZoom() {
     }
 }
 
+/**
+ * ズームを再度有効化する
+ */
 export function enableMapZoom() {
     try {
         debugLog(4, 'enableMapZoom() が呼び出されました。');
@@ -855,6 +880,9 @@ export function enableMapZoom() {
     }
 }
 
+/**
+ * 現在の地図幅を返す
+ */
 export function getMapWidth() {
     try {
         return mapWidth;
@@ -864,6 +892,9 @@ export function getMapWidth() {
     }
 }
 
+/**
+ * 現在の地図高さを返す
+ */
 export function getMapHeight() {
     try {
         return mapHeight;
@@ -873,6 +904,9 @@ export function getMapHeight() {
     }
 }
 
+/**
+ * ズーム倍率を動的に設定
+ */
 export function setZoomScaleExtent(min, max) {
     if (!zoom) return;
     zoom.scaleExtent([min, max]);
