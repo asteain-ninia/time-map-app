@@ -8,7 +8,7 @@ import {
     getMapWidth,
     disableMapZoom,
     enableMapZoom
-} from './src/map/mapRenderer.js';
+} from './src/map/mapRenderer/index.js';
 import { setupEventHandlers } from './src/eventHandlers/index.js';
 import { initInteraction } from './src/map/mapInteraction.js';
 import { debugLog } from './src/utils/logger.js';
