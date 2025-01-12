@@ -11,13 +11,26 @@ import {
 } from '../ui/forms.js';
 import { debugLog } from '../utils/logger.js';
 
-let svg;
-let zoomGroup;
-let mapWidth = 1000;
-let mapHeight = 800;
+/**
+ * ズーム用の変数
+ */
 let zoom;
 
-// DataStore への参照を保持（ロード後に使う）
+/**
+ * マップ全体の <svg> と、ズーム用 <g>
+ */
+let svg;
+let zoomGroup;
+
+/**
+ * 地図の幅・高さ
+ */
+let mapWidth = 1000;
+let mapHeight = 800;
+
+/**
+ * データストア参照
+ */
 let MapModuleDataStore;
 
 /**
@@ -241,14 +254,14 @@ export function renderData() {
         function duplicateFeature(feature, offsetX) {
             debugLog(4, `duplicateFeature() を呼び出します。feature.id=${feature?.id}, offsetX=${offsetX}`);
             try {
-                const duplicated = { ...feature };
-                duplicated.points = duplicated.points.map(p => ({
+                const dup = { ...feature };
+                dup.points = dup.points.map(p => ({
                     x: p.x + offsetX,
                     y: p.y
                 }));
-                return duplicated;
-            } catch (error) {
-                debugLog(1, `duplicateFeature() でエラー発生: ${error}`);
+                return dup;
+            } catch (err) {
+                debugLog(1, `duplicateFeature() でエラー発生: ${err}`);
                 return feature; // エラー時はそのまま返す
             }
         }
@@ -288,10 +301,7 @@ export function renderData() {
             attributes: {
                 d: d => {
                     if (!d.points || d.points.length < 3) return null;
-                    return d3.line()
-                        .x(p => p.x)
-                        .y(p => p.y)
-                        .curve(d3.curveLinearClosed)(d.points);
+                    return d3.line().x(p => p.x).y(p => p.y).curve(d3.curveLinearClosed)(d.points);
                 },
                 stroke: colorScheme.polygonStroke,
                 'stroke-width': 2,
@@ -343,9 +353,7 @@ export function renderData() {
             attributes: {
                 d: d => {
                     if (!d.points || d.points.length < 2) return null;
-                    return d3.line()
-                        .x(p => p.x)
-                        .y(p => p.y)(d.points);
+                    return d3.line().x(p => p.x).y(p => p.y)(d.points);
                 },
                 stroke: colorScheme.lineStroke,
                 'stroke-width': 2,
@@ -444,6 +452,7 @@ export function renderData() {
             drawTemporaryFeatures(st);
         }
 
+        // 頂点編集など
         const selectedFeature = st.selectedFeature;
         if (
             st.isEditMode &&
@@ -460,8 +469,8 @@ export function renderData() {
             (st.currentTool === 'lineVertexEdit' || st.currentTool === 'polygonVertexEdit') &&
             st.selectedFeature
         ) {
-            drawVertexHandles(dataGroup, st.selectedFeature);
-            drawEdgeHandles(dataGroup, st.selectedFeature);
+            drawVertexHandles(dataGroup, selectedFeature);
+            drawEdgeHandles(dataGroup, selectedFeature);
         }
     } catch (error) {
         debugLog(1, `renderData() でエラー発生: ${error}`);
@@ -476,13 +485,11 @@ export function renderData() {
  * @param {boolean} [isPointCircle=false] - 円を描画するポイントかどうか（半径を調整するため）
  */
 function drawFeatures(container, { data, className, elementType, attributes, style, eventHandlers }, k, isPointCircle = false) {
+    debugLog(4, `drawFeatures() が呼び出されました。className=${className}`);
     try {
-        debugLog(4, `drawFeatures() が呼び出されました。className=${className}`);
         const selection = container.selectAll(`.${className}`)
             .data(data, d => {
-                if (!d.points || !d.points[0]) {
-                    return `empty-${Math.random()}`;
-                }
+                if (!d.points || !d.points[0]) return `empty-${Math.random()}`;
                 return `${d.id || Math.random()}-${Math.floor(d.points[0].x / mapWidth)}`;
             });
 
@@ -490,44 +497,46 @@ function drawFeatures(container, { data, className, elementType, attributes, sty
             .append(elementType)
             .attr('class', className);
 
+        // Enter
         enterSelection.each(function (d) {
-            const element = d3.select(this);
+            const el = d3.select(this);
             // 属性
             for (const [attrName, attrValue] of Object.entries(attributes)) {
                 if (typeof attrValue === 'function') {
-                    element.attr(attrName, attrValue(d));
+                    el.attr(attrName, attrValue(d));
                 } else {
-                    element.attr(attrName, attrValue);
+                    el.attr(attrName, attrValue);
                 }
             }
             // スタイル
             if (style) {
-                for (const [styleName, styleValue] of Object.entries(style)) {
-                    element.style(styleName, styleValue);
+                for (const [sName, sValue] of Object.entries(style)) {
+                    el.style(sName, sValue);
                 }
             }
             // イベント
-            for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
-                element.on(eventName, eventHandler);
+            for (const [eName, eHandler] of Object.entries(eventHandlers)) {
+                el.on(eName, eHandler);
             }
         });
 
+        // Update
         selection.each(function (d) {
-            const element = d3.select(this);
+            const el = d3.select(this);
             for (const [attrName, attrValue] of Object.entries(attributes)) {
                 if (typeof attrValue === 'function') {
-                    element.attr(attrName, attrValue(d));
+                    el.attr(attrName, attrValue(d));
                 } else {
-                    element.attr(attrName, attrValue);
+                    el.attr(attrName, attrValue);
                 }
             }
             if (style) {
-                for (const [styleName, styleValue] of Object.entries(style)) {
-                    element.style(styleName, styleValue);
+                for (const [sName, sValue] of Object.entries(style)) {
+                    el.style(sName, sValue);
                 }
             }
-            for (const [eventName, eventHandler] of Object.entries(eventHandlers)) {
-                element.on(eventName, eventHandler);
+            for (const [eName, eHandler] of Object.entries(eventHandlers)) {
+                el.on(eName, eHandler);
             }
         });
 
@@ -546,15 +555,14 @@ function drawFeatures(container, { data, className, elementType, attributes, sty
                 .filter(d => d.id === st.selectedFeature.id)
                 .each(function () {
                     try {
-                        const element = d3.select(this);
+                        const el = d3.select(this);
                         if (className === 'line' || className === 'polygon') {
-                            element
-                                .attr('stroke', colorScheme.highlightStroke)
+                            el.attr('stroke', colorScheme.highlightStroke)
                                 .attr('stroke-width', colorScheme.highlightStrokeWidth)
                                 .style('vector-effect', 'non-scaling-stroke');
                         } else if (className === 'point') {
                             // 円をハイライト色に
-                            element.attr('fill', colorScheme.highlightPointFill);
+                            el.attr('fill', colorScheme.highlightPointFill);
                         }
                     } catch (err) {
                         debugLog(1, `drawFeatures ハイライト処理中にエラー: ${err}`);
@@ -593,7 +601,7 @@ function drawTemporaryFeatures(state) {
                         className: `tempLine-${offset}`,
                         elementType: 'path',
                         attributes: {
-                            d: d => d3.line().x(pp => pp.x).y(pp => pp.y)(d)
+                            d: dd => d3.line().x(pp => pp.x).y(pp => pp.y)(dd)
                         },
                         style: {
                             stroke: colorScheme.tempLineStroke,
@@ -625,7 +633,7 @@ function drawTemporaryFeatures(state) {
                         className: `tempPolygon-${offset}`,
                         elementType: 'path',
                         attributes: {
-                            d: d => d3.line().x(pp => pp.x).y(pp => pp.y).curve(d3.curveLinearClosed)(d)
+                            d: dd => d3.line().x(pp => pp.x).y(pp => pp.y).curve(d3.curveLinearClosed)(dd)
                         },
                         style: {
                             stroke: colorScheme.tempPolygonStroke,
@@ -666,7 +674,7 @@ function drawTemporaryFeatures(state) {
                         }
                     });
                 }
-            } catch (innerError) {
+            } catch (err) {
                 debugLog(1, `drawTemporaryFeatures ループ内 (offset=${offset}) でエラー発生: ${innerError}`);
             }
         });
@@ -685,18 +693,18 @@ function drawTemporaryFeature(group, { data, className, elementType, attributes,
             .append(elementType)
             .attr('class', className);
 
-        elements.each(function (d) {
+        elements.each(function (dd) {
             const el = d3.select(this);
             for (const [attrName, attrValue] of Object.entries(attributes)) {
                 if (typeof attrValue === 'function') {
-                    el.attr(attrName, attrValue(d));
+                    el.attr(attrName, attrValue(dd));
                 } else {
                     el.attr(attrName, attrValue);
                 }
             }
             if (style) {
-                for (const [styleName, styleValue] of Object.entries(style)) {
-                    el.style(styleName, styleValue);
+                for (const [stName, stVal] of Object.entries(style)) {
+                    el.style(stName, stVal);
                 }
             }
         });
@@ -746,7 +754,7 @@ function drawVertexHandles(dataGroup, feature) {
                         const isSelected = selectedVertices.some(
                             v => v.featureId === feature.id && v.vertexIndex === d.index
                         );
-                        return isSelected ? 28 / k : 20 / k;  // 選択頂点はやや大きく
+                        return isSelected ? 28 / k : 20 / k;
                     })
                     .attr('fill', d => {
                         const isSelected = selectedVertices.some(
@@ -794,9 +802,7 @@ function drawEdgeHandles(dataGroup, feature) {
         const st = stateManager.getState();
         const isPolygon = st.currentTool === 'polygonVertexEdit';
         const requiredMin = isPolygon ? 3 : 2;
-        if (feature.points.length < requiredMin) {
-            return;
-        }
+        if (feature.points.length < requiredMin) return;
 
         const k = getCurrentZoomScale();
         const offsetXValues = [-2, -1, 0, 1, 2].map(offset => offset * mapWidth);
@@ -860,8 +866,8 @@ function drawEdgeHandles(dataGroup, feature) {
  * ズームを一時的に無効化する（頂点ドラッグなどの操作時に呼ばれる）
  */
 export function disableMapZoom() {
+    debugLog(4, 'disableMapZoom() が呼び出されました。');
     try {
-        debugLog(4, 'disableMapZoom() が呼び出されました。');
         svg.on('.zoom', null);
     } catch (error) {
         debugLog(1, `disableMapZoom() でエラー発生: ${error}`);
@@ -869,11 +875,11 @@ export function disableMapZoom() {
 }
 
 /**
- * ズームを再度有効化する
+ * ズーム再有効化
  */
 export function enableMapZoom() {
+    debugLog(4, 'enableMapZoom() が呼び出されました。');
     try {
-        debugLog(4, 'enableMapZoom() が呼び出されました。');
         svg.call(zoom);
     } catch (error) {
         debugLog(1, `enableMapZoom() でエラー発生: ${error}`);
@@ -884,6 +890,7 @@ export function enableMapZoom() {
  * 現在の地図幅を返す
  */
 export function getMapWidth() {
+    debugLog(4, 'getMapWidth() が呼び出されました。');
     try {
         return mapWidth;
     } catch (error) {
@@ -896,6 +903,7 @@ export function getMapWidth() {
  * 現在の地図高さを返す
  */
 export function getMapHeight() {
+    debugLog(4, 'getMapHeight() が呼び出されました。');
     try {
         return mapHeight;
     } catch (error) {
@@ -908,6 +916,205 @@ export function getMapHeight() {
  * ズーム倍率を動的に設定
  */
 export function setZoomScaleExtent(min, max) {
-    if (!zoom) return;
-    zoom.scaleExtent([min, max]);
+    debugLog(4, 'setZoomScaleExtent() が呼び出されました。');
+    try {
+        if (!zoom) return;
+        zoom.scaleExtent([min, max]);
+    } catch (error) {
+        debugLog(1, `setZoomScaleExtent() でエラー発生: ${error}`);
+    }
+}
+
+/**
+ * 頂点ドラッグ開始
+ */
+function vertexDragStarted(event, dData, offsetX, feature) {
+    debugLog(4, `vertexDragStarted()が呼び出されました。: feature.id=${feature?.id}, offsetX=${offsetX}`);
+    try {
+        event.sourceEvent.stopPropagation();
+        stateManager.setState({ isDragging: true });
+
+        d3.select(event.sourceEvent.target).raise().classed('active', true);
+        disableMapZoom();
+
+        tooltips.hideTooltip();
+
+        dData._dragged = false;
+
+        const transform = d3.zoomTransform(d3.select('#map svg').node());
+        const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
+        dData.dragStartX = transform.invertX(mouseX);
+        dData.dragStartY = transform.invertY(mouseY);
+    } catch (error) {
+        debugLog(1, `vertexDragStarted() でエラー発生: ${error}`);
+    }
+}
+
+/**
+ * 頂点ドラッグ中
+ */
+function vertexDragged(event, dData) {
+    debugLog(4, 'vertexDragged() が呼び出されました。');
+    try {
+        dData._dragged = true;
+        const transform = d3.zoomTransform(d3.select('#map svg').node());
+        const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
+        const transformedMouseX = transform.invertX(mouseX);
+        const transformedMouseY = transform.invertY(mouseY);
+
+        const dx = transformedMouseX - dData.dragStartX;
+        const dy = transformedMouseY - dData.dragStartY;
+
+        const st = stateManager.getState();
+        const { selectedFeature, selectedVertices } = st;
+        if (!selectedFeature) return;
+
+        let allSelected = selectedVertices.filter(v => v.featureId === selectedFeature.id);
+        if (allSelected.length === 0) {
+            allSelected = [{ featureId: selectedFeature.id, vertexIndex: dData.index }];
+        }
+
+        for (const pos of allSelected) {
+            selectedFeature.points[pos.vertexIndex].x += dx;
+            selectedFeature.points[pos.vertexIndex].y += dy;
+        }
+
+        dData.dragStartX = transformedMouseX;
+        dData.dragStartY = transformedMouseY;
+
+        if (st.currentTool === 'lineVertexEdit') {
+            MapModuleDataStore.updateLine(selectedFeature, false);
+        } else if (st.currentTool === 'polygonVertexEdit') {
+            MapModuleDataStore.updatePolygon(selectedFeature, false);
+        } else if (st.currentTool === 'pointMove') {
+            if (selectedFeature.points && selectedFeature.points.length === 1) {
+                MapModuleDataStore.updatePoint(selectedFeature, false);
+            }
+        }
+    } catch (error) {
+        debugLog(1, `vertexDragged() でエラーが発生しました: ${error}`);
+    }
+}
+
+/**
+ * 頂点ドラッグ終了
+ */
+function vertexDragEnded(event, dData, feature) {
+    debugLog(4, `vertexDragEnded()が呼び出されました。: feature.id=${feature?.id}`);
+    try {
+        stateManager.setState({ isDragging: false });
+        d3.select(event.sourceEvent.target).classed('active', false);
+        enableMapZoom();
+
+        if (dData._dragged) {
+            const st = stateManager.getState();
+            if (st.currentTool === 'lineVertexEdit') {
+                MapModuleDataStore.updateLine(feature, true);
+            } else if (st.currentTool === 'polygonVertexEdit') {
+                MapModuleDataStore.updatePolygon(feature, true);
+            } else if (st.currentTool === 'pointMove') {
+                if (feature.points && feature.points.length === 1) {
+                    MapModuleDataStore.updatePoint(feature, true);
+                }
+            }
+        }
+    } catch (error) {
+        debugLog(1, `vertexDragEnded() でエラーが発生しました: ${error}`);
+    }
+}
+
+/**
+ * エッジドラッグ開始
+ */
+function edgeDragStarted(event, dData, offsetX, feature) {
+    debugLog(4, `edgeDragStarted(): feature.id=${feature?.id}, offsetX=${offsetX}`);
+    try {
+        event.sourceEvent.stopPropagation();
+        stateManager.setState({ isDragging: true });
+        d3.select(event.sourceEvent.target).raise().classed('active', true);
+        disableMapZoom();
+
+        tooltips.hideTooltip();
+
+        dData._dragged = false;
+
+        const transform = d3.zoomTransform(d3.select('#map svg').node());
+        const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
+        dData.dragStartX = transform.invertX(mouseX);
+        dData.dragStartY = transform.invertY(mouseY);
+
+        // エッジに新頂点を挿入
+        const newX = dData.dragStartX;
+        const newY = dData.dragStartY;
+        feature.points.splice(dData.endIndex, 0, { x: newX, y: newY });
+
+        if (stateManager.getState().currentTool === 'lineVertexEdit') {
+            MapModuleDataStore.updateLine(feature, false);
+        } else if (stateManager.getState().currentTool === 'polygonVertexEdit') {
+            MapModuleDataStore.updatePolygon(feature, false);
+        }
+
+        dData._dragged = true;
+    } catch (error) {
+        debugLog(1, `edgeDragStarted() でエラーが発生しました: ${error}`);
+    }
+}
+
+/**
+ * エッジドラッグ中
+ */
+function edgeDragged(event, dData) {
+    debugLog(4, 'edgeDragged() が呼び出されました。');
+    try {
+        dData._dragged = true;
+        const transform = d3.zoomTransform(d3.select('#map svg').node());
+        const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
+        const transformedMouseX = transform.invertX(mouseX);
+        const transformedMouseY = transform.invertY(mouseY);
+
+        const dx = transformedMouseX - dData.dragStartX;
+        const dy = transformedMouseY - dData.dragStartY;
+
+        const st = stateManager.getState();
+        const feature = st.selectedFeature;
+        if (!feature) return;
+
+        // 追加した頂点 (endIndex) を動かす
+        feature.points[dData.endIndex].x += dx;
+        feature.points[dData.endIndex].y += dy;
+
+        dData.dragStartX = transformedMouseX;
+        dData.dragStartY = transformedMouseY;
+
+        if (st.currentTool === 'lineVertexEdit') {
+            MapModuleDataStore.updateLine(feature, false);
+        } else if (st.currentTool === 'polygonVertexEdit') {
+            MapModuleDataStore.updatePolygon(feature, false);
+        }
+    } catch (error) {
+        debugLog(1, `edgeDragged() でエラーが発生しました: ${error}`);
+    }
+}
+
+/**
+ * エッジドラッグ終了
+ */
+function edgeDragEnded(event, dData, feature) {
+    debugLog(4, `edgeDragEnded():が呼び出されました。 feature.id=${feature?.id}`);
+    try {
+        stateManager.setState({ isDragging: false });
+        d3.select(event.sourceEvent.target).classed('active', false);
+        enableMapZoom();
+
+        if (dData._dragged) {
+            const st = stateManager.getState();
+            if (st.currentTool === 'lineVertexEdit') {
+                MapModuleDataStore.updateLine(feature, true);
+            } else if (st.currentTool === 'polygonVertexEdit') {
+                MapModuleDataStore.updatePolygon(feature, true);
+            }
+        }
+    } catch (error) {
+        debugLog(1, `edgeDragEnded() でエラーが発生しました: ${error}`);
+    }
 }
