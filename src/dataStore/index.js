@@ -4,6 +4,7 @@ import stateManager from './../state/index.js';
 import PointsStore from './pointsStore.js';
 import LinesStore from './linesStore.js';
 import PolygonsStore from './polygonsStore.js';
+import VerticesStore from './verticesStore.js';  // 新規追加
 import { debugLog } from '../utils/logger.js';
 import uiManager from '../ui/uiManager.js';
 import UndoRedoManager from '../utils/undoRedoManager.js';
@@ -57,7 +58,6 @@ const DataStore = {
             PointsStore.updatePoint(p);
             unsavedChanges = true;
 
-            // ここでは呼び出し側がrecordするため、基本false
             if (shouldRecord && oldObj) {
                 const action = UndoRedoManager.makeAction('updatePoint', oldObj, p);
                 UndoRedoManager.record(action);
@@ -85,6 +85,7 @@ const DataStore = {
         }
     },
 
+    // ... Lines ...
     getLines: (year) => {
         debugLog(4, `DataStore.getLines() が呼び出されました。year=${year}`);
         try {
@@ -157,6 +158,7 @@ const DataStore = {
         }
     },
 
+    // ... Polygons ...
     getPolygons: (year) => {
         debugLog(4, `DataStore.getPolygons() が呼び出されました。year=${year}`);
         try {
@@ -235,6 +237,7 @@ const DataStore = {
             PointsStore.clear();
             LinesStore.clear();
             PolygonsStore.clear();
+            VerticesStore.clear(); // 頂点もクリア
         } catch (error) {
             debugLog(1, `DataStore.clearData() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.clearData() でエラーが発生しました: ${error}`, 'error');
@@ -258,22 +261,35 @@ const DataStore = {
             PointsStore.clear();
             LinesStore.clear();
             PolygonsStore.clear();
+            VerticesStore.clear();
 
+            // ここで古い形式 (point.x, point.y) などは読み込み不可とする or エラーにする
+            // いちおう簡易チェックする
             if (data.points) {
                 data.points.forEach((point) => {
+                    if (!point.vertexIds && (point.x !== undefined || point.y !== undefined)) {
+                        throw new Error('Old-format point data found (points array). This version does not support it.');
+                    }
                     this.addPoint(point, false);
                 });
             }
             if (data.lines) {
                 data.lines.forEach((line) => {
+                    if (!line.vertexIds && line.points) {
+                        throw new Error('Old-format line data found (points array). This version does not support it.');
+                    }
                     this.addLine(line, false);
                 });
             }
             if (data.polygons) {
                 data.polygons.forEach((polygon) => {
+                    if (!polygon.vertexIds && polygon.points) {
+                        throw new Error('Old-format polygon data found (points array). This version does not support it.');
+                    }
                     this.addPolygon(polygon, false);
                 });
             }
+
             unsavedChanges = false;
         } catch (error) {
             debugLog(1, `DataStore.loadData() でエラー発生: ${error}`);
@@ -304,7 +320,7 @@ const DataStore = {
     },
 
     /**
-     * 全ストアから指定IDに該当する要素を検索して返す
+     * 全ストアから指定IDに該当する要素を検索して返す (Point/Line/Polygon いずれか)
      * なければnull
      */
     getById: (id) => {
