@@ -3,7 +3,7 @@
 import stateManager from '../state/index.js';
 import uiManager from '../ui/uiManager.js';
 import { showEditForm, showLineEditForm, showPolygonEditForm } from '../ui/forms.js';
-import { removeSelectedVertices } from '../map/mapInteraction.js';
+import { removeSelectedVertices } from '../map/mapInteraction/index.js';
 import { getMapWidth, setZoomScaleExtent } from '../map/mapRenderer/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';

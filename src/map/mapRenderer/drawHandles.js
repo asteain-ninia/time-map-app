@@ -9,7 +9,7 @@ import {
     edgeDragStarted,
     edgeDragged,
     edgeDragEnded
-} from '../mapInteraction.js';
+} from '../mapInteraction/index.js';
 
 import { getCurrentZoomScale } from './index.js';
 // mapRenderer/index.js にある関数を使う
