@@ -168,6 +168,7 @@ export function renderData() {
         let lines = MapModuleDataStore.getLines(currentYear);
         let polygons = MapModuleDataStore.getPolygons(currentYear);
 
+        // ID付与
         points.forEach((p) => {
             if (!p.id) p.id = Date.now() + Math.random();
         });
@@ -178,6 +179,7 @@ export function renderData() {
             if (!pg.id) pg.id = Date.now() + Math.random();
         });
 
+        // ポリゴンが2頂点しかない場合をライン化するロジック
         const polygonsToLine = polygons.filter((pg) => pg.points && pg.points.length === 2);
         polygons = polygons.filter((pg) => !(pg.points && pg.points.length === 2));
 
@@ -202,33 +204,33 @@ export function renderData() {
                 allAdjustedPoints.push(
                     ...points.map((pt) => {
                         const dup = { ...pt };
-                        dup.points = dup.points.map((p) => ({
-                            x: p.x + offsetX,
-                            y: p.y
-                        }));
-                        dup.originalPoint = pt;
+                        if (dup.x !== undefined && dup.y !== undefined) {
+                            dup.x = dup.x + offsetX;
+                        }
                         return dup;
                     })
                 );
                 allAdjustedLines.push(
                     ...lines.map((ln) => {
                         const dup = { ...ln };
-                        dup.points = dup.points.map((p) => ({
-                            x: p.x + offsetX,
-                            y: p.y
-                        }));
-                        dup.originalLine = ln.originalLine || ln;
+                        if (dup.points) {
+                            dup.points = dup.points.map((p) => ({
+                                x: p.x + offsetX,
+                                y: p.y
+                            }));
+                        }
                         return dup;
                     })
                 );
                 allAdjustedPolygons.push(
                     ...polygons.map((pg) => {
                         const dup = { ...pg };
-                        dup.points = dup.points.map((p) => ({
-                            x: p.x + offsetX,
-                            y: p.y
-                        }));
-                        dup.originalPolygon = pg.originalPolygon || pg;
+                        if (dup.points) {
+                            dup.points = dup.points.map((p) => ({
+                                x: p.x + offsetX,
+                                y: p.y
+                            }));
+                        }
                         return dup;
                     })
                 );
@@ -274,17 +276,25 @@ export function renderData() {
                             const pageY = event.sourceEvent ? event.sourceEvent.pageY : event.pageY;
 
                             if (cst.isAddMode) {
-                                // 無視
-                            } else if (cst.isEditMode && cst.currentTool === 'polygonAttributeEdit') {
-                                if (!d.originalPolygon.id) d.originalPolygon.id = d.id;
-                                stateManager.setState({ selectedFeature: d.originalPolygon });
-                                renderData();
-                                showPolygonEditForm(d.originalPolygon, renderData, false, true, pageX, pageY);
-                            } else if (cst.isEditMode && cst.currentTool === 'polygonVertexEdit') {
-                                if (!d.originalPolygon.id) d.originalPolygon.id = d.id;
-                                stateManager.setState({ selectedFeature: d.originalPolygon, selectedVertices: [] });
-                                renderData();
-                            } else if (!cst.isEditMode) {
+                                // 追加モード時は無視
+                            } else if (cst.isEditMode) {
+                                if (cst.currentTool === 'polygonAttributeEdit') {
+                                    // 属性編集 → Storeオブジェクトをフォームに渡す
+                                    // d.originalPolygon にストアオブジェクト
+                                    if (!d.originalPolygon.id) d.originalPolygon.id = d.id;
+                                    stateManager.setState({ selectedFeature: d });
+                                    renderData();
+                                    // フォームはストアオブジェクトへ編集を加える
+                                    showPolygonEditForm(d.originalPolygon, renderData, false, true, pageX, pageY);
+
+                                } else if (cst.currentTool === 'polygonVertexEdit') {
+                                    // 頂点編集 → selectedFeature = d (描画用)
+                                    if (!d.originalPolygon.id) d.originalPolygon.id = d.id;
+                                    stateManager.setState({ selectedFeature: d, selectedVertices: [] });
+                                    renderData();
+                                }
+                            } else {
+                                // 詳細ウィンドウ
                                 showDetailWindow(d, pageX, pageY);
                             }
                         } catch (error) {
@@ -333,16 +343,20 @@ export function renderData() {
 
                             if (cst.isAddMode) {
                                 // 無視
-                            } else if (cst.isEditMode && cst.currentTool === 'lineAttributeEdit') {
-                                if (!d.originalLine.id) d.originalLine.id = d.id;
-                                stateManager.setState({ selectedFeature: d.originalLine });
-                                renderData();
-                                showLineEditForm(d.originalLine, renderData, false, true, pageX, pageY);
-                            } else if (cst.isEditMode && cst.currentTool === 'lineVertexEdit') {
-                                if (!d.originalLine.id) d.originalLine.id = d.id;
-                                stateManager.setState({ selectedFeature: d.originalLine, selectedVertices: [] });
-                                renderData();
-                            } else if (!cst.isEditMode) {
+                            } else if (cst.isEditMode) {
+                                if (cst.currentTool === 'lineAttributeEdit') {
+                                    // 属性編集
+                                    if (!d.originalLine.id) d.originalLine.id = d.id;
+                                    stateManager.setState({ selectedFeature: d });
+                                    renderData();
+                                    showLineEditForm(d.originalLine, renderData, false, true, pageX, pageY);
+
+                                } else if (cst.currentTool === 'lineVertexEdit') {
+                                    if (!d.originalLine.id) d.originalLine.id = d.id;
+                                    stateManager.setState({ selectedFeature: d, selectedVertices: [] });
+                                    renderData();
+                                }
+                            } else {
                                 showDetailWindow(d, pageX, pageY);
                             }
                         } catch (error) {
@@ -362,8 +376,8 @@ export function renderData() {
                 className: 'point',
                 elementType: 'circle',
                 attributes: {
-                    cx: (d) => d.points[0].x,
-                    cy: (d) => d.points[0].y,
+                    cx: (d) => d.x,
+                    cy: (d) => d.y,
                     fill: colorScheme.pointFill,
                     'pointer-events': 'all'
                 },
@@ -385,19 +399,23 @@ export function renderData() {
 
                             if (cst.isAddMode) {
                                 // 無視
-                            } else {
-                                if (cst.isEditMode && cst.currentTool === 'pointAttributeEdit') {
+                            } else if (cst.isEditMode) {
+                                if (cst.currentTool === 'pointAttributeEdit') {
+                                    // 属性編集
                                     if (!d.originalPoint.id) d.originalPoint.id = d.id;
-                                    stateManager.setState({ selectedFeature: d.originalPoint });
+                                    stateManager.setState({ selectedFeature: d });
                                     renderData();
                                     showEditForm(d.originalPoint, renderData, pageX, pageY);
-                                } else if (!cst.isEditMode) {
-                                    showDetailWindow(d, pageX, pageY);
-                                } else if (cst.isEditMode && cst.currentTool === 'pointMove') {
+
+                                } else if (cst.currentTool === 'pointMove') {
+                                    // 頂点移動用
                                     if (!d.originalPoint.id) d.originalPoint.id = d.id;
-                                    stateManager.setState({ selectedFeature: d.originalPoint, selectedVertices: [] });
+                                    stateManager.setState({ selectedFeature: d, selectedVertices: [] });
                                     renderData();
                                 }
+                            } else {
+                                // 詳細ウィンドウ
+                                showDetailWindow(d, pageX, pageY);
                             }
                         } catch (error) {
                             debugLog(1, `point.click でエラー: ${error}`);
@@ -413,7 +431,6 @@ export function renderData() {
             drawTemporaryFeatures(st);
         }
 
-        // ★ 頂点ハンドル描画はここで呼び出す
         const selectedFeature = st.selectedFeature;
         if (
             st.isEditMode &&
@@ -422,7 +439,7 @@ export function renderData() {
             selectedFeature.points &&
             selectedFeature.points.length === 1
         ) {
-            // pointMove でも頂点ハンドルを出したいなら drawVertexHandles() を利用
+            // pointMove で頂点ハンドル表示
             drawVertexHandles(dataGroup, selectedFeature);
         }
 
@@ -431,6 +448,7 @@ export function renderData() {
             (st.currentTool === 'lineVertexEdit' || st.currentTool === 'polygonVertexEdit') &&
             st.selectedFeature
         ) {
+            // lineVertexEdit / polygonVertexEdit で頂点ハンドル
             drawVertexHandles(dataGroup, selectedFeature);
             drawEdgeHandles(dataGroup, selectedFeature);
         }

@@ -13,7 +13,7 @@ import {
 
 import { getCurrentZoomScale } from './index.js';
 // mapRenderer/index.js にある関数を使う
-import { colorScheme } from './index.js'; // ハンドル色用
+import { colorScheme } from './index.js';
 
 /**
  * ライン/ポリゴン頂点編集時の頂点ハンドル表示
@@ -40,6 +40,7 @@ export function drawVertexHandles(dataGroup, feature) {
         const k = getCurrentZoomScale();
 
         // 横方向複製用 ( -2, -1, 0, 1, 2 ) に合わせて頂点も複製
+        // これは「地図が左右連続」であるため
         const offsetXValues = [-2, -1, 0, 1, 2].map(o => o * st.mapWidth || 0);
 
         offsetXValues.forEach(offsetX => {

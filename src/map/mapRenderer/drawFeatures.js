@@ -10,7 +10,7 @@ import { colorScheme } from './index.js';
  * 
  * @param {D3Selection} container - 親コンテナ(g要素)
  * @param {Object} options
- *   - data: 描画対象となるフィーチャ配列
+ *   - data: 描画対象となるフィーチャ配列 (point/line/polygonいずれも可)
  *   - className: 副作用として付与するクラス名 ('point', 'line', 'polygon' など)
  *   - elementType: 'path' or 'circle'
  *   - attributes: 各要素に設定する属性 (オブジェクト)
@@ -35,7 +35,10 @@ export function drawFeatures(
                 data,
                 (d) => {
                     // データ識別用にIDと座標などを組み合わせ
-                    if (!d.points || !d.points[0]) return `empty-${Math.random()}`;
+                    // （points[0]があればその座標を使う） 
+                    if (!d.points || !d.points[0]) {
+                        return `${d.id || Math.random()}-noPoint`;
+                    }
                     return `${d.id || Math.random()}-${Math.floor(d.points[0].x)}`;
                 }
             );
