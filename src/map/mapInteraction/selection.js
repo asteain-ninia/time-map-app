@@ -5,11 +5,11 @@ import { debugLog } from '../../utils/logger.js';
 import tooltips from '../../ui/tooltips.js';
 
 /**
- * 指定フィーチャがクリックされたとき、選択頂点を更新
- * - Shiftキーが押されていれば複数選択をトグル
- * - フィーチャが異なる場合は選択を切り替え
- * @param {Object} feature
- * @param {number} [vertexIndex]
+ * 指定フィーチャがクリックされたとき、selectedVerticesを更新。
+ * - Shiftキーが押されていれば頂点をトグル
+ * - フィーチャが違う場合は選択を切り替え
+ * @param {Object} feature - 描画用feature
+ * @param {number} [vertexIndex] - 頂点インデックス(クリックされた頂点)
  * @param {boolean} shiftKey
  */
 export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
@@ -19,6 +19,7 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
         const selectedVertices = state.selectedVertices || [];
         let newSelectedFeature = state.selectedFeature || null;
 
+        // featureにidがない場合付与
         if (!feature.id) {
             feature.id = Date.now() + Math.random();
         }
@@ -33,7 +34,7 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
             return;
         }
 
-        // 別フィーチャだったら切り替え
+        // 別フィーチャなら切り替え
         if (newSelectedFeature.id !== feature.id) {
             newSelectedFeature = feature;
             const newVertices = vertexIndex !== undefined
@@ -46,9 +47,9 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
             return;
         }
 
-        // 同じフィーチャ上
+        // 同じフィーチャ
         if (vertexIndex === undefined) {
-            // 頂点指定なし -> 頂点選択を解除
+            // 頂点指定なし -> 頂点選択解除
             stateManager.setState({
                 selectedFeature: newSelectedFeature,
                 selectedVertices: []
@@ -68,6 +69,7 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
                 newSelection = [...selectedVertices, { featureId: feature.id, vertexIndex }];
             }
         } else {
+            // 単独選択
             newSelection = [{ featureId: feature.id, vertexIndex }];
         }
 
@@ -99,7 +101,7 @@ export function isVertexSelected(feature, vertexIndex) {
 }
 
 /**
- * ドラッグ終了などでツールチップ表示する際に、フィーチャの現在のプロパティを取得
+ * ツールチップ表示用にフィーチャの年や名前を返す
  * @param {Object} feature
  * @returns {Object} {name, year}
  */
@@ -130,8 +132,8 @@ export function getFeatureTooltipData(feature) {
             }
         }
         // point
-        if (feature.properties && Array.isArray(feature.properties)) {
-            const props = getPropertiesForYear(feature.properties, currentYear);
+        if (feature.originalPoint && feature.originalPoint.properties) {
+            const props = getPropertiesForYear(feature.originalPoint.properties, currentYear);
             if (props) {
                 return {
                     name: props.name || 'Undefined',
@@ -139,6 +141,7 @@ export function getFeatureTooltipData(feature) {
                 };
             }
         }
+        // fallback
         return {
             name: feature.name || 'Undefined',
             year: '不明'
@@ -150,29 +153,19 @@ export function getFeatureTooltipData(feature) {
 }
 
 /**
- * 以下の関数は timeUtils や UIモジュールで定義されていますが、
- * 循環参照を避けるために 'selection.js' 内からは直接 import しない想定です。
- * ここではダミーとして宣言だけしておき、実際には 'renderer.js' 等でグローバルに割り当てるなど。
+ * ダミー。実際には src/utils/timeUtils.js から import する想定。
  */
 function getPropertiesForYear(propertiesArray, year) {
-    // 実際には src/utils/timeUtils.js からのimport
     if (!propertiesArray || propertiesArray.length === 0) {
         return null;
     }
-
-    const validProps = propertiesArray.filter(prop => typeof prop.year === 'number' && !isNaN(prop.year));
-    if (validProps.length === 0) {
-        return null;
-    }
-    validProps.sort((a, b) => a.year - b.year);
-
-    let current = null;
-    for (const p of validProps) {
+    const valids = propertiesArray.filter(prop => typeof prop.year === 'number');
+    valids.sort((a, b) => a.year - b.year);
+    let result = null;
+    for (const p of valids) {
         if (p.year <= year) {
-            current = p;
-        } else {
-            break;
-        }
+            result = p;
+        } else break;
     }
-    return current;
+    return result;
 }

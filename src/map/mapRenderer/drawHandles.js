@@ -12,8 +12,8 @@ import {
 } from '../mapInteraction/index.js';
 
 import { getCurrentZoomScale } from './index.js';
-// mapRenderer/index.js にある関数を使う
 import { colorScheme } from './index.js';
+import { updateSelectionForFeature } from '../mapInteraction/selection.js';
 
 /**
  * ライン/ポリゴン頂点編集時の頂点ハンドル表示
@@ -71,6 +71,7 @@ export function drawVertexHandles(dataGroup, feature) {
                     })
                     .style('pointer-events', 'all')
                     .style('vector-effect', 'non-scaling-stroke')
+                    // ドラッグ
                     .call(
                         d3.drag()
                             .on('start', (event, dData) => {
@@ -82,7 +83,18 @@ export function drawVertexHandles(dataGroup, feature) {
                             .on('end', (event, dData) => {
                                 vertexDragEnded(event, dData, feature);
                             })
-                    );
+                    )
+                    // mousedownで頂点選択
+                    .on('mousedown', function (event, dData) {
+                        try {
+                            event.stopPropagation(); // バブルを止める
+                            const shiftKey = event.shiftKey;
+                            // feature.id, dData.index を選択
+                            updateSelectionForFeature(feature, dData.index, shiftKey);
+                        } catch (e) {
+                            debugLog(1, `vertex-handle mousedownでエラー: ${e}`);
+                        }
+                    });
 
                 vertices.exit().remove();
             } catch (innerError) {

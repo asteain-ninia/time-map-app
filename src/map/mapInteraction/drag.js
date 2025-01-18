@@ -51,6 +51,13 @@ export function enableInteractionDragState(enableMapZoom, renderData) {
 }
 
 /**
+ * ストア上の本物のオブジェクトを返す。描画用featureの場合 originalLine/originalPolygon/originalPoint があればそれを返す。
+ */
+function getStoreObj(feature) {
+    return feature.originalLine || feature.originalPolygon || feature.originalPoint || feature;
+}
+
+/**
  * ドラッグ開始時
  */
 export function vertexDragStarted(event, dData, offsetX, feature) {
@@ -74,9 +81,7 @@ export function vertexDragStarted(event, dData, offsetX, feature) {
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
 
-        // feature は描画用オブジェクト（.points あり）
-        // Storeオブジェクトを取り出す
-        const storeObj = feature.originalLine || feature.originalPolygon || feature.originalPoint || feature;
+        const storeObj = getStoreObj(feature);
         dragOriginalShape = JSON.parse(JSON.stringify(storeObj));
         isDraggingFeature = true;
 
@@ -110,16 +115,10 @@ export function vertexDragged(event, dData) {
         const { selectedFeature, selectedVertices } = st;
         if (!selectedFeature) return;
 
-        // Storeオブジェクトを参照
-        const storeObj = selectedFeature.originalLine ||
-            selectedFeature.originalPolygon ||
-            selectedFeature.originalPoint ||
-            selectedFeature;
+        const storeObj = getStoreObj(selectedFeature);
+        if (!storeObj.vertexIds) return;
 
-        if (!storeObj.vertexIds) {
-            return;
-        }
-
+        // 頂点をすべて移動
         let allSelected = selectedVertices.filter(v => v.featureId === selectedFeature.id);
         if (allSelected.length === 0) {
             allSelected = [{ featureId: selectedFeature.id, vertexIndex: dData.index }];
@@ -130,10 +129,15 @@ export function vertexDragged(event, dData) {
             if (!vId) continue;
             const vert = VerticesStore.getById(vId);
             if (!vert) continue;
-
             const newX = vert.x + dx;
             const newY = vert.y + dy;
             VerticesStore.updateVertex({ id: vId, x: newX, y: newY });
+
+            // ★ドラッグ中に selectedFeature.points[...] も更新し、ハンドルをリアルタイムで追随させる
+            if (selectedFeature.points && selectedFeature.points[pos.vertexIndex]) {
+                selectedFeature.points[pos.vertexIndex].x += dx;
+                selectedFeature.points[pos.vertexIndex].y += dy;
+            }
         }
 
         dData.dragStartX = transformedMouseX;
@@ -178,10 +182,7 @@ export function vertexDragEnded(event, dData, feature) {
 
         const st = stateManager.getState();
         if (dData._dragged) {
-            const storeObj = feature.originalLine ||
-                feature.originalPolygon ||
-                feature.originalPoint ||
-                feature;
+            const storeObj = getStoreObj(feature);
 
             const oldShape = dragOriginalShape;
             const newShape = JSON.parse(JSON.stringify(storeObj));
@@ -214,14 +215,13 @@ export function vertexDragEnded(event, dData, feature) {
         delete dData.dragStartY;
         delete dData._dragged;
         dragOriginalShape = null;
-
     } catch (error) {
         debugLog(1, `vertexDragEnded() でエラー発生: ${error}`);
     }
 }
 
 /**
- * エッジドラッグ開始（新頂点挿入）
+ * エッジドラッグ開始 (新頂点挿入)
  */
 export function edgeDragStarted(event, dData, offsetX, feature) {
     debugLog(4, `edgeDragStarted() が呼び出されました。feature.id=${feature?.id}, offsetX=${offsetX}`);
@@ -244,10 +244,7 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
 
-        const storeObj = feature.originalLine ||
-            feature.originalPolygon ||
-            feature.originalPoint ||
-            feature;
+        const storeObj = getStoreObj(feature);
         dragOriginalShape = JSON.parse(JSON.stringify(storeObj));
 
         if (storeObj.vertexIds) {
@@ -256,9 +253,20 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
                 y: dData.dragStartY
             });
             storeObj.vertexIds.splice(dData.endIndex, 0, newId);
+
+            // ★ selectedFeature.points も挿入
+            if (feature.points) {
+                feature.points.splice(dData.endIndex, 0, {
+                    x: dData.dragStartX,
+                    y: dData.dragStartY
+                });
+            }
         }
 
         isDraggingFeature = true;
+
+        // 頂点追加直後は selectedVertices をクリアしておく（インデックスずれ対策）
+        stateManager.setState({ selectedVertices: [] });
 
         const st = stateManager.getState();
         if (st.currentTool === 'lineVertexEdit') {
@@ -298,10 +306,7 @@ export function edgeDragged(event, dData) {
         const selectedFeature = st.selectedFeature;
         if (!selectedFeature) return;
 
-        const storeObj = selectedFeature.originalLine ||
-            selectedFeature.originalPolygon ||
-            selectedFeature.originalPoint ||
-            selectedFeature;
+        const storeObj = getStoreObj(selectedFeature);
         if (!storeObj.vertexIds) return;
 
         const vId = storeObj.vertexIds[dData.endIndex];
@@ -312,6 +317,12 @@ export function edgeDragged(event, dData) {
             const newX = vert.x + dx;
             const newY = vert.y + dy;
             VerticesStore.updateVertex({ id: vId, x: newX, y: newY });
+        }
+
+        // 同じく selectedFeature.points を更新
+        if (selectedFeature.points && selectedFeature.points[dData.endIndex]) {
+            selectedFeature.points[dData.endIndex].x += dx;
+            selectedFeature.points[dData.endIndex].y += dy;
         }
 
         dData.dragStartX = transformedMouseX;
@@ -352,10 +363,7 @@ export function edgeDragEnded(event, dData, feature) {
         }
 
         const st = stateManager.getState();
-        const storeObj = feature.originalLine ||
-            feature.originalPolygon ||
-            feature.originalPoint ||
-            feature;
+        const storeObj = getStoreObj(feature);
 
         if (st.currentTool === 'lineVertexEdit') {
             DataStore.updateLine(storeObj, false);
