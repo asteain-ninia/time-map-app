@@ -4,7 +4,7 @@ import stateManager from './../state/index.js';
 import PointsStore from './pointsStore.js';
 import LinesStore from './linesStore.js';
 import PolygonsStore from './polygonsStore.js';
-import VerticesStore from './verticesStore.js';
+import VerticesStore from './verticesStore.js';  // 新規追加
 import { debugLog } from '../utils/logger.js';
 import uiManager from '../ui/uiManager.js';
 import UndoRedoManager from '../utils/undoRedoManager.js';
@@ -237,7 +237,7 @@ const DataStore = {
             PointsStore.clear();
             LinesStore.clear();
             PolygonsStore.clear();
-            VerticesStore.clear();
+            VerticesStore.clear(); // 頂点もクリア
         } catch (error) {
             debugLog(1, `DataStore.clearData() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.clearData() でエラーが発生しました: ${error}`, 'error');
@@ -263,76 +263,30 @@ const DataStore = {
             PolygonsStore.clear();
             VerticesStore.clear();
 
-            // ここで旧形式(.x,.y)があるならエラー
-            // さらに「.points[].x,y」があればそれを使って頂点を再作成する
-            // まず points
+            // ここで古い形式 (point.x, point.y) などは読み込み不可とする or エラーにする
+            // いちおう簡易チェックする
             if (data.points) {
-                data.points.forEach((p) => {
-                    // vertexIds がなければ作る
-                    if (!p.vertexIds || !Array.isArray(p.vertexIds) || p.vertexIds.length === 0) {
-                        // もし p.x,y があるなら、とにかく頂点1個追加
-                        if (p.x !== undefined && p.y !== undefined) {
-                            const vId = VerticesStore.addVertex({ x: p.x, y: p.y });
-                            p.vertexIds = [vId];
-                        } else if (p.points && p.points.length === 1) {
-                            // 旧: p.points[0].x,y
-                            const v = p.points[0];
-                            const vId = VerticesStore.addVertex({ x: v.x, y: v.y });
-                            p.vertexIds = [vId];
-                        }
-                    } else if (p.points && p.points.length === p.vertexIds.length) {
-                        // 頂点数が一致する → 頂点を再生成
-                        p.vertexIds.forEach((id, idx) => {
-                            // いったん id は無視して新規に追加
-                            const v = p.points[idx];
-                            const newId = VerticesStore.addVertex({ x: v.x, y: v.y });
-                            p.vertexIds[idx] = newId;
-                        });
+                data.points.forEach((point) => {
+                    if (!point.vertexIds && (point.x !== undefined || point.y !== undefined)) {
+                        throw new Error('Old-format point data found (points array). This version does not support it.');
                     }
-                    // あとはstoreに追加
-                    this.addPoint(p, false);
+                    this.addPoint(point, false);
                 });
             }
-
-            // lines
             if (data.lines) {
-                data.lines.forEach((ln) => {
-                    if (!ln.vertexIds || !Array.isArray(ln.vertexIds) || ln.vertexIds.length === 0) {
-                        // もし ln.points があれば そこから頂点生成
-                        if (ln.points && ln.points.length > 0) {
-                            ln.vertexIds = ln.points.map(pt => {
-                                return VerticesStore.addVertex({ x: pt.x, y: pt.y });
-                            });
-                        }
-                    } else if (ln.points && ln.points.length === ln.vertexIds.length) {
-                        // 頂点数が一致 → 再生成
-                        ln.vertexIds.forEach((id, idx) => {
-                            const v = ln.points[idx];
-                            const newId = VerticesStore.addVertex({ x: v.x, y: v.y });
-                            ln.vertexIds[idx] = newId;
-                        });
+                data.lines.forEach((line) => {
+                    if (!line.vertexIds && line.points) {
+                        throw new Error('Old-format line data found (points array). This version does not support it.');
                     }
-                    this.addLine(ln, false);
+                    this.addLine(line, false);
                 });
             }
-
-            // polygons
             if (data.polygons) {
-                data.polygons.forEach((pg) => {
-                    if (!pg.vertexIds || !Array.isArray(pg.vertexIds) || pg.vertexIds.length === 0) {
-                        if (pg.points && pg.points.length > 0) {
-                            pg.vertexIds = pg.points.map(pt => {
-                                return VerticesStore.addVertex({ x: pt.x, y: pt.y });
-                            });
-                        }
-                    } else if (pg.points && pg.points.length === pg.vertexIds.length) {
-                        pg.vertexIds.forEach((id, idx) => {
-                            const v = pg.points[idx];
-                            const newId = VerticesStore.addVertex({ x: v.x, y: v.y });
-                            pg.vertexIds[idx] = newId;
-                        });
+                data.polygons.forEach((polygon) => {
+                    if (!polygon.vertexIds && polygon.points) {
+                        throw new Error('Old-format polygon data found (points array). This version does not support it.');
                     }
-                    this.addPolygon(pg, false);
+                    this.addPolygon(polygon, false);
                 });
             }
 
