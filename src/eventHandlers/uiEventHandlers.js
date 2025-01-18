@@ -9,10 +9,6 @@ import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import UndoRedoManager from '../utils/undoRedoManager.js';
 
-import DataStore from '../dataStore/index.js';
-import VerticesStore from '../dataStore/verticesStore.js';
-
-
 /**
  * UIイベント系のリスナーを設定する
  * (IPCを含まない、純粋にUIやDOM操作に関連するイベント)
@@ -119,7 +115,6 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             });
         });
 
-        // 地図クリック
         const svg = d3.select('#map svg');
         if (!svg.empty()) {
             svg.on('click', (event) => {
@@ -269,23 +264,16 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                 const currentYear = currentState.currentYear || 0;
                 if (currentState.isAddMode && currentState.isDrawing) {
                     if (currentState.currentTool === 'line' && currentState.tempLinePoints.length >= 2) {
-                        // ★★ ここで .tempLinePoints から vertexIds を作成 ★★
-                        const vertexIds = currentState.tempLinePoints.map(pt => {
-                            // 頂点をVerticesStoreに追加
-                            return VerticesStore.addVertex({ x: pt.x, y: pt.y });
-                        });
-
                         const newLine = {
                             id: Date.now(),
-                            vertexIds: vertexIds,
+                            points: currentState.tempLinePoints.slice(),
                             properties: [{
                                 year: currentYear,
                                 name: '新しい線情報',
                                 description: '',
                             }],
                         };
-                        // 旧: DataStore.addLine(newLine, true) → これで線が表示されない
-                        // 新: vertexIds があるのでOK
+                        // DataStoreへの追加を「shouldRecord=true」にすることで、UndoRedoManagerに最終"addLine"が積まれる
                         DataStore.addLine(newLine, true);
 
                         stateManager.setState({
@@ -297,14 +285,9 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
                         showLineEditForm(newLine, renderData, true, true);
 
                     } else if (currentState.currentTool === 'polygon' && currentState.tempPolygonPoints.length >= 3) {
-                        // .tempPolygonPoints から頂点追加
-                        const vertexIds = currentState.tempPolygonPoints.map(pt => {
-                            return VerticesStore.addVertex({ x: pt.x, y: pt.y });
-                        });
-
                         const newPolygon = {
                             id: Date.now(),
-                            vertexIds: vertexIds,
+                            points: currentState.tempPolygonPoints.slice(),
                             properties: [{
                                 year: currentYear,
                                 name: '新しい面情報',
@@ -328,7 +311,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
-        // ★ スライダーのリアルタイム変更
+        // ★ 年スライダー (timeSlider) の変更を即時反映
         const timeSlider = document.getElementById('timeSlider');
         const currentYearDisplay = document.getElementById('currentYear');
         timeSlider.addEventListener('input', () => {
@@ -343,7 +326,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
-        // スライダー最小/最大
+        // ★ スライダー最小/最大値 (sliderMin / sliderMax) の自動反映
         const sliderMinInput = document.getElementById('sliderMin');
         const sliderMaxInput = document.getElementById('sliderMax');
         sliderMinInput.addEventListener('input', () => {
@@ -379,7 +362,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
-        // ズーム最小/最大
+        // ★ ズーム倍率最小/最大 (zoomMin / zoomMax) の自動反映
         const zoomMinInput = document.getElementById('zoomMin');
         const zoomMaxInput = document.getElementById('zoomMax');
         zoomMinInput.addEventListener('input', () => {
@@ -413,7 +396,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
-        // 世界名・概要
+        // ★ 世界名・概要（worldName / worldDescription）も自動反映
         const worldNameInput = document.getElementById('worldName');
         const worldDescriptionInput = document.getElementById('worldDescription');
         worldNameInput.addEventListener('input', () => {
@@ -435,7 +418,7 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
-        // 設定モーダル
+        // 設定モーダル関連
         document.getElementById('settingsButton').addEventListener('click', () => {
             debugLog(4, 'settingsButton クリックイベントが発生しました。');
             try {
@@ -470,7 +453,6 @@ export function setupUIEventListeners(DataStore, MapModuleInstance, renderData) 
             }
         });
 
-        // キー押下イベント
         document.addEventListener('keydown', (e) => {
             try {
                 // Undo (Ctrl+Z)
