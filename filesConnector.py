@@ -5,7 +5,13 @@ import sys
 # 結合したい拡張子のリスト（引数がない場合のデフォルト）
 default_extensions = ['.js', '.html', '.md', '.css', '.cjs']
 output_file = 'combined_file.txt'  # 出力ファイル名
-ignore_files = ['package.json', 'package-lock.json']  # 無視するファイル名
+
+# グローバルに無視するファイル
+ignore_files = ['package.json', 'package-lock.json']  
+
+# カレントディレクトリのみで無視するファイル
+ignore_files_in_current_dir = ['テスト項目.md']  
+
 src_dir = 'src'  # ソースコードのルートディレクトリ
 
 # コマンドライン引数から拡張子を取得（デフォルトはdefault_extensions）
@@ -47,7 +53,12 @@ def process_files_in_current_dir(outfile):
     """
     for ext in extensions:
         for file_path in glob.glob(f'*{ext}'):
-            if os.path.isfile(file_path) and os.path.basename(file_path) not in ignore_files:
+            base_name = os.path.basename(file_path)
+            if (
+                os.path.isfile(file_path) 
+                and base_name not in ignore_files            # グローバル除外
+                and base_name not in ignore_files_in_current_dir  # カレントのみ除外
+            ):
                 write_file_content(outfile, file_path)
 
 # 出力ファイルを生成して結合処理を実行
