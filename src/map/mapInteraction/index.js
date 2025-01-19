@@ -1,4 +1,8 @@
 // src/map/mapInteraction/index.js
+/****************************************************
+ * mapInteractionモジュールのエントリポイント
+ * - ドラッグ操作、頂点編集、選択などをまとめる
+ ****************************************************/
 
 import stateManager from '../../state/index.js';
 import DataStore from '../../dataStore/index.js';
@@ -7,9 +11,6 @@ import { debugLog } from '../../utils/logger.js';
 import tooltips from '../../ui/tooltips.js';
 import UndoRedoManager from '../../utils/undoRedoManager.js';
 
-/**
- * 他ファイルから再インポート
- */
 import {
     vertexDragStarted,
     vertexDragged,
@@ -30,19 +31,16 @@ import {
     removeSelectedVertices
 } from './edit.js';
 
-
 /**
- * 地図描画後に一度呼ばれ、コールバックを登録する初期化関数
- * @param {Object} callbacks - { renderData, disableMapZoom, enableMapZoom }
+ * 地図描画後に一度呼び出される初期化
  */
 function initInteraction({ renderData, disableMapZoom, enableMapZoom }) {
     debugLog(4, 'initInteraction() が呼び出されました。');
     try {
-        // drag.js側に外部コールバックを渡す
         disableInteractionDragState(disableMapZoom);
         enableInteractionDragState(enableMapZoom);
 
-        // コールバックを保持し、ドラッグ完了などで再描画を呼べるようにする
+        // コールバックを保持して、ドラッグ完了などで再描画を呼べるようにする
         setRenderDataCallback(renderData);
     } catch (error) {
         debugLog(1, `initInteraction() でエラー発生: ${error}`);
@@ -54,29 +52,24 @@ function initInteraction({ renderData, disableMapZoom, enableMapZoom }) {
  */
 function setRenderDataCallback(renderData) {
     try {
-        // drag.js の setRenderDataCallback を呼ぶ
-        // ファイル間の依存を少なくしたい場合はここでまとめて行う
         enableInteractionDragState(null, renderData);
     } catch (error) {
         debugLog(1, `setRenderDataCallback() でエラー発生: ${error}`);
     }
 }
 
-/**
- * モジュール内の主なエクスポート
- */
 export {
     initInteraction,
-    // ドラッグ系
+    // ドラッグ
     vertexDragStarted,
     vertexDragged,
     vertexDragEnded,
     edgeDragStarted,
     edgeDragged,
     edgeDragEnded,
-    // 選択系
+    // 選択
     updateSelectionForFeature,
     isVertexSelected,
-    // 頂点削除など編集系
+    // 頂点削除
     removeSelectedVertices
 };

@@ -1,4 +1,7 @@
 // src/map/mapInteraction/selection.js
+/****************************************************
+ * オブジェクトや頂点の選択状態管理
+ ****************************************************/
 
 import stateManager from '../../state/index.js';
 import { debugLog } from '../../utils/logger.js';
@@ -33,7 +36,7 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
             return;
         }
 
-        // 別フィーチャだったら切り替え
+        // 別フィーチャ
         if (newSelectedFeature.id !== feature.id) {
             newSelectedFeature = feature;
             const newVertices = vertexIndex !== undefined
@@ -48,7 +51,6 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
 
         // 同じフィーチャ上
         if (vertexIndex === undefined) {
-            // 頂点指定なし -> 頂点選択を解除
             stateManager.setState({
                 selectedFeature: newSelectedFeature,
                 selectedVertices: []
@@ -56,7 +58,6 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
             return;
         }
 
-        // 頂点クリック
         const exists = selectedVertices.some(v => v.featureId === feature.id && v.vertexIndex === vertexIndex);
         let newSelection;
 
@@ -81,10 +82,7 @@ export function updateSelectionForFeature(feature, vertexIndex, shiftKey) {
 }
 
 /**
- * 頂点がすでに選択されているかどうかを確認
- * @param {Object} feature
- * @param {number} vertexIndex
- * @returns {boolean}
+ * 頂点がすでに選択されているかどうか
  */
 export function isVertexSelected(feature, vertexIndex) {
     debugLog(4, `isVertexSelected() が呼び出されました。feature.id=${feature?.id}, vertexIndex=${vertexIndex}`);
@@ -100,6 +98,7 @@ export function isVertexSelected(feature, vertexIndex) {
 
 /**
  * ドラッグ終了などでツールチップ表示する際に、フィーチャの現在のプロパティを取得
+ * → ここでは store の getPropertiesForYear() に依存せず、feature から直接読み出す
  * @param {Object} feature
  * @returns {Object} {name, year}
  */
@@ -111,7 +110,7 @@ export function getFeatureTooltipData(feature) {
 
         // polygon
         if (feature.originalPolygon && feature.originalPolygon.properties) {
-            const props = getPropertiesForYear(feature.originalPolygon.properties, currentYear);
+            const props = pickNearestProperties(feature.originalPolygon.properties, currentYear);
             if (props) {
                 return {
                     name: props.name || 'Undefined',
@@ -121,7 +120,7 @@ export function getFeatureTooltipData(feature) {
         }
         // line
         if (feature.originalLine && feature.originalLine.properties) {
-            const props = getPropertiesForYear(feature.originalLine.properties, currentYear);
+            const props = pickNearestProperties(feature.originalLine.properties, currentYear);
             if (props) {
                 return {
                     name: props.name || 'Undefined',
@@ -131,7 +130,7 @@ export function getFeatureTooltipData(feature) {
         }
         // point
         if (feature.properties && Array.isArray(feature.properties)) {
-            const props = getPropertiesForYear(feature.properties, currentYear);
+            const props = pickNearestProperties(feature.properties, currentYear);
             if (props) {
                 return {
                     name: props.name || 'Undefined',
@@ -150,21 +149,15 @@ export function getFeatureTooltipData(feature) {
 }
 
 /**
- * 以下の関数は timeUtils や UIモジュールで定義されていますが、
- * 循環参照を避けるために 'selection.js' 内からは直接 import しない想定です。
- * ここではダミーとして宣言だけしておき、実際には 'renderer.js' 等でグローバルに割り当てるなど。
+ * feature.properties配列から、currentYear以下で最も新しい年を持つプロパティを返す
  */
-function getPropertiesForYear(propertiesArray, year) {
-    // 実際には src/utils/timeUtils.js からのimport
+function pickNearestProperties(propertiesArray, year) {
     if (!propertiesArray || propertiesArray.length === 0) {
         return null;
     }
-
-    const validProps = propertiesArray.filter(prop => typeof prop.year === 'number' && !isNaN(prop.year));
-    if (validProps.length === 0) {
-        return null;
-    }
-    validProps.sort((a, b) => a.year - b.year);
+    const validProps = propertiesArray
+        .filter(prop => typeof prop.year === 'number' && !isNaN(prop.year))
+        .sort((a, b) => a.year - b.year);
 
     let current = null;
     for (const p of validProps) {

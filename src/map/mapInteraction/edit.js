@@ -1,4 +1,7 @@
 // src/map/mapInteraction/edit.js
+/****************************************************
+ * 主に頂点削除などの編集系機能
+ ****************************************************/
 
 import stateManager from '../../state/index.js';
 import DataStore from '../../dataStore/index.js';
@@ -10,7 +13,6 @@ import UndoRedoManager from '../../utils/undoRedoManager.js';
  * 選択頂点を削除する
  * - 点情報の場合 → 単頂点ならオブジェクトごと削除
  * - ライン/ポリゴンの場合 → 頂点を削除し、頂点数0ならオブジェクトごと削除
- * - Undo/Redo対応
  */
 export function removeSelectedVertices() {
     debugLog(4, 'removeSelectedVertices() が呼び出されました。');
@@ -26,8 +28,8 @@ export function removeSelectedVertices() {
         if (selectedFeature.points && selectedFeature.points.length === 1 && st.currentTool === 'pointMove') {
             DataStore.removePoint(selectedFeature.id, false);
             stateManager.setState({ selectedFeature: null, selectedVertices: [] });
-            uiManager.updateUI(); // フォームやリストを更新
-            // Undo
+            uiManager.updateUI();
+
             const action = UndoRedoManager.makeAction('removePoint', beforeObj, null);
             UndoRedoManager.record(action);
             return;
@@ -41,7 +43,6 @@ export function removeSelectedVertices() {
             selectedFeature.id = Date.now() + Math.random();
         }
 
-        // 削除処理
         const sortedIndices = selectedVertices.map(v => v.vertexIndex).sort((a, b) => b - a);
         sortedIndices.forEach(idx => {
             if (selectedFeature.points && selectedFeature.points.length > idx) {
@@ -58,7 +59,7 @@ export function removeSelectedVertices() {
             }
             stateManager.setState({ selectedFeature: null, selectedVertices: [] });
         } else {
-            // 頂点がまだ残っている
+            // 頂点がまだ残っている → update
             if (st.currentTool === 'lineVertexEdit') {
                 DataStore.updateLine(selectedFeature, false);
             } else if (st.currentTool === 'polygonVertexEdit') {

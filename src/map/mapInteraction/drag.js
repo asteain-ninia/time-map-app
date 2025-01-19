@@ -1,4 +1,10 @@
 // src/map/mapInteraction/drag.js
+/****************************************************
+ * 頂点ドラッグ操作などを扱うモジュール
+ * - ドラッグに伴う座標更新は feature.points[] に直接反映し、
+ *   最終的に DataStore.updateLine() / updatePolygon() 等で
+ *   頂点ストア(VerticesStore)に書き戻される。
+ ****************************************************/
 
 import stateManager from '../../state/index.js';
 import DataStore from '../../dataStore/index.js';
@@ -9,13 +15,12 @@ import { getFeatureTooltipData } from './selection.js';
 
 /**
  * ドラッグ中に「元の形状」を保持するための変数。
- * - 頂点編集・ポイント移動などの操作前の状態を保存しておく。
  */
 let dragOriginalShape = null;
 let isDraggingFeature = false;
 
 /**
- * ドラッグ中に連続で再描画を走らせないためのタイマー
+ * ドラッグ中に頻繁に呼び出される再描画を間引くためのタイマー
  */
 let dragRenderTimeout = null;
 const DRAG_RENDER_DELAY = 50;
@@ -60,7 +65,7 @@ export function enableInteractionDragState(enableMapZoom, renderData) {
 }
 
 /**
- * ドラッグ中に頻繁に呼び出される描画を間引きする
+ * ドラッグ中に再描画を間引く
  */
 function throttledRenderDuringDrag() {
     try {
@@ -76,7 +81,6 @@ function throttledRenderDuringDrag() {
         debugLog(1, `throttledRenderDuringDrag() でエラー発生: ${error}`);
     }
 }
-
 
 /**
  * 頂点ドラッグ開始
@@ -101,10 +105,6 @@ export function vertexDragStarted(event, dData, offsetX, feature) {
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
-
-        // 選択状態の更新は selection.js の updateSelectionForFeature() で行うが、
-        // ここでは shiftKey などをチェックして必要に応じて呼び出す実装が通常
-        // （ただし、別ファイルで行うならそこに処理を委譲）
 
         // ドラッグ開始時点の形状をdeep copy
         dragOriginalShape = JSON.parse(JSON.stringify(feature));
@@ -143,6 +143,7 @@ export function vertexDragged(event, dData) {
         // 頂点選択を複数している場合を考慮して、全頂点を移動させる
         let allSelected = selectedVertices.filter(v => v.featureId === selectedFeature.id);
         if (allSelected.length === 0) {
+            // クリック頂点のみ
             allSelected = [{ featureId: selectedFeature.id, vertexIndex: dData.index }];
         }
         for (const pos of allSelected) {
@@ -192,7 +193,7 @@ export function vertexDragEnded(event, dData, feature) {
             tooltips.moveTooltip(event.sourceEvent);
         }
 
-        // ドラッグ完了したら UndoRedoManager に1回分の更新アクションを記録
+        // ドラッグ完了: UndoRedoManager に1回分の更新アクションを記録
         const st = stateManager.getState();
         if (dData._dragged) {
             if (st.currentTool === 'lineVertexEdit') {
@@ -255,7 +256,7 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
 
-        // 頂点追加前の状態を保存
+        // 頂点追加前の状態をdeep copy
         dragOriginalShape = JSON.parse(JSON.stringify(feature));
 
         // 新しい頂点を挿入
@@ -263,20 +264,9 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
         const newY = dData.dragStartY;
         feature.points.splice(dData.endIndex, 0, { x: newX, y: newY });
 
-        if (!feature.id) {
-            feature.id = Date.now() + Math.random();
-        }
-
         isDraggingFeature = true;
-
-        const st = stateManager.getState();
-        if (st.currentTool === 'lineVertexEdit') {
-            DataStore.updateLine(feature, false);
-        } else if (st.currentTool === 'polygonVertexEdit') {
-            DataStore.updatePolygon(feature, false);
-        }
-
         dData._dragged = true;
+
         if (dragRenderTimeout) {
             clearTimeout(dragRenderTimeout);
             dragRenderTimeout = null;
@@ -307,7 +297,6 @@ export function edgeDragged(event, dData) {
         const feature = st.selectedFeature;
         if (!feature) return;
 
-        // 挿入した頂点を動かす
         feature.points[dData.endIndex].x += dx;
         feature.points[dData.endIndex].y += dy;
 

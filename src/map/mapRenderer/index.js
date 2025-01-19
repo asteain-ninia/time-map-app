@@ -1,4 +1,7 @@
 // src/map/mapRenderer/index.js
+/****************************************************
+ * マップの読み込み、描画、ズーム操作など
+ ****************************************************/
 
 import stateManager from '../../state/index.js';
 import uiManager from '../../ui/uiManager.js';
@@ -178,6 +181,7 @@ export function renderData() {
             if (!pg.id) pg.id = Date.now() + Math.random();
         });
 
+        // 特殊ケース: ポリゴン頂点が2つしかない場合などはライン扱いに
         const polygonsToLine = polygons.filter((pg) => pg.points && pg.points.length === 2);
         polygons = polygons.filter((pg) => !(pg.points && pg.points.length === 2));
 
@@ -413,7 +417,7 @@ export function renderData() {
             drawTemporaryFeatures(st);
         }
 
-        // ★ 頂点ハンドル描画はここで呼び出す
+        // 頂点ハンドル描画
         const selectedFeature = st.selectedFeature;
         if (
             st.isEditMode &&
@@ -422,7 +426,6 @@ export function renderData() {
             selectedFeature.points &&
             selectedFeature.points.length === 1
         ) {
-            // pointMove でも頂点ハンドルを出したいなら drawVertexHandles() を利用
             drawVertexHandles(dataGroup, selectedFeature);
         }
 

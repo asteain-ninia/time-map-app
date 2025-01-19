@@ -1,4 +1,13 @@
 // src/dataStore/index.js
+/****************************************************
+ *
+ * DataStoreモジュール
+ * 変更点:
+ *  - 上記stores(PointsStore, LinesStore, PolygonsStore)が頂点ストアを参照する形になりましたが、
+ *    DataStoreからの呼び出しには大きな変更はありません。
+ *  - 全体としては、頂点管理の実態がVerticesStoreへ移行したため、ここでの座標参照は行わず、
+ *    各Storeの getPoints() / getLines() / getPolygons() が返す座標を利用するだけ。
+ ****************************************************/
 
 import stateManager from './../state/index.js';
 import PointsStore from './pointsStore.js';
@@ -8,6 +17,7 @@ import { debugLog } from '../utils/logger.js';
 import uiManager from '../ui/uiManager.js';
 import UndoRedoManager from '../utils/undoRedoManager.js';
 
+// 頂点ストアへの参照は本ファイルで直接は行わず、各storeに任せる。
 let unsavedChanges = false;
 
 const DataStore = {
@@ -57,7 +67,6 @@ const DataStore = {
             PointsStore.updatePoint(p);
             unsavedChanges = true;
 
-            // ここでは呼び出し側がrecordするため、基本false
             if (shouldRecord && oldObj) {
                 const action = UndoRedoManager.makeAction('updatePoint', oldObj, p);
                 UndoRedoManager.record(action);

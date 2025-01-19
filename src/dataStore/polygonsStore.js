@@ -4,6 +4,7 @@ import { getPropertiesForYear } from '../utils/index.js';
 import stateManager from '../state/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
+import VerticesStore from './verticesStore.js';
 
 const polygons = new Map();
 
@@ -32,12 +33,27 @@ const PolygonsStore = {
                             };
                         }
                     }
+
+                    // 頂点ストアから座標を取得
+                    let coords = [];
+                    if (polygon.vertexIds && Array.isArray(polygon.vertexIds)) {
+                        coords = polygon.vertexIds.map(vId => {
+                            const vertex = VerticesStore.getById(vId);
+                            if (vertex) {
+                                return { x: vertex.x, y: vertex.y };
+                            }
+                            return { x: 0, y: 0 };
+                        });
+                    }
+
                     if (properties) {
                         return {
                             id: polygon.id,
-                            points: polygon.points,
+                            vertexIds: polygon.vertexIds,
                             properties: polygon.properties,
                             originalPolygon: polygon,
+                            // renderer 等が利用するために "points" として座標配列を付与
+                            points: coords,
                             ...properties,
                         };
                     } else {
@@ -63,9 +79,30 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * 面情報を追加
+     * - polygon.vertexIds が無い場合は polygon.points などから頂点ストアへ登録
+     */
     addPolygon(polygon) {
         debugLog(4, `PolygonsStore.addPolygon() が呼び出されました。polygon.id=${polygon?.id}`);
         try {
+            if (!polygon.properties || !Array.isArray(polygon.properties)) {
+                polygon.properties = [];
+            }
+
+            if (!polygon.vertexIds || !Array.isArray(polygon.vertexIds) || polygon.vertexIds.length === 0) {
+                if (polygon.points && Array.isArray(polygon.points) && polygon.points.length > 0) {
+                    polygon.vertexIds = polygon.points.map(coord => {
+                        const newVid = Date.now() + Math.random();
+                        VerticesStore.addVertex({ id: newVid, x: coord.x || 0, y: coord.y || 0 });
+                        return newVid;
+                    });
+                    delete polygon.points;
+                } else {
+                    polygon.vertexIds = [];
+                }
+            }
+
             polygons.set(polygon.id, polygon);
         } catch (error) {
             debugLog(1, `PolygonsStore.addPolygon() でエラー発生: ${error}`);
@@ -76,12 +113,34 @@ const PolygonsStore = {
     updatePolygon(updatedPolygon) {
         debugLog(4, `PolygonsStore.updatePolygon() が呼び出されました。updatedPolygon.id=${updatedPolygon?.id}`);
         try {
-            if (polygons.has(updatedPolygon.id)) {
-                polygons.set(updatedPolygon.id, updatedPolygon);
-            } else {
+            const existing = polygons.get(updatedPolygon.id);
+            if (!existing) {
                 debugLog(3, `PolygonsStore.updatePolygon() - 更新対象の面情報が見つかりません。ID: ${updatedPolygon?.id}`);
                 console.warn('更新対象の面情報が見つかりません。ID:', updatedPolygon.id);
+                return;
             }
+
+            if (updatedPolygon.points && Array.isArray(updatedPolygon.points)) {
+                existing.vertexIds = updatedPolygon.points.map((coord, idx) => {
+                    let vId;
+                    if (existing.vertexIds && existing.vertexIds[idx]) {
+                        vId = existing.vertexIds[idx];
+                        VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+                    } else {
+                        vId = Date.now() + Math.random();
+                        VerticesStore.addVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+                    }
+                    return vId;
+                });
+                delete updatedPolygon.points;
+            }
+
+            for (const key in updatedPolygon) {
+                if (key === 'id' || key === 'vertexIds') continue;
+                existing[key] = updatedPolygon[key];
+            }
+
+            polygons.set(existing.id, existing);
         } catch (error) {
             debugLog(1, `PolygonsStore.updatePolygon() でエラー発生: ${error}`);
             showNotification('面情報の更新中にエラーが発生しました。', 'error');
@@ -89,9 +148,10 @@ const PolygonsStore = {
     },
 
     removePolygon(id) {
-        debugLog(4, `PolygonsStore.removePolygon() が呼び出されました。id=${id}`);
+        debugLog(4, `PolygonsStore.removePolygon() が呼び出されました。id=${id},`);
         try {
             polygons.delete(id);
+            // 頂点削除は未実装
         } catch (error) {
             debugLog(1, `PolygonsStore.removePolygon() でエラー発生: ${error}`);
             showNotification('面情報の削除中にエラーが発生しました。', 'error');
