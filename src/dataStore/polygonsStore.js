@@ -2,15 +2,19 @@
 /****************************************************
  * 面情報ストア
  *
- * 修正点:
- *   - getAllPolygonsWithCoords() 追加
- *   - addPolygon, updatePolygon時に points 同期
+ * 主な修正:
+ *   - addPolygon / updatePolygon 時に
+ *     points と vertexIds の数を揃える。
  ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import VerticesStore from './verticesStore.js';
+
+function generateVertexId() {
+    return 'vx-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
+}
 
 const polygons = new Map();
 
@@ -85,26 +89,34 @@ const PolygonsStore = {
             if (!poly.properties) {
                 poly.properties = [];
             }
-
-            if (!poly.vertexIds || !Array.isArray(poly.vertexIds) || poly.vertexIds.length === 0) {
-                if (poly.points && Array.isArray(poly.points) && poly.points.length > 0) {
-                    poly.vertexIds = poly.points.map(coord => {
-                        const vid = Date.now() + Math.random();
-                        VerticesStore.addVertex({ id: vid, x: coord.x || 0, y: coord.y || 0 });
-                        return vid;
-                    });
-                } else {
-                    poly.vertexIds = [];
-                }
+            if (!poly.id) {
+                poly.id = 'pg-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
             }
 
-            // points フィールドを同期
-            if (!poly.points || !Array.isArray(poly.points)) {
-                poly.points = poly.vertexIds.map(vid => {
-                    const vx = VerticesStore.getById(vid);
-                    return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
-                });
+            if (!poly.vertexIds) {
+                poly.vertexIds = [];
             }
+
+            const ptsArr = (poly.points && Array.isArray(poly.points)) ? poly.points : [];
+            while (poly.vertexIds.length < ptsArr.length) {
+                const newVid = generateVertexId();
+                poly.vertexIds.push(newVid);
+                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
+            }
+            while (poly.vertexIds.length > ptsArr.length) {
+                poly.vertexIds.pop();
+            }
+
+            for (let i = 0; i < ptsArr.length; i++) {
+                const coord = ptsArr[i];
+                const vId = poly.vertexIds[i];
+                VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+            }
+
+            poly.points = poly.vertexIds.map(vId => {
+                const vx = VerticesStore.getById(vId);
+                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+            });
 
             polygons.set(poly.id, poly);
         } catch (error) {
@@ -122,18 +134,25 @@ const PolygonsStore = {
                 return;
             }
 
-            if (updated.points && Array.isArray(updated.points)) {
-                existing.vertexIds = updated.points.map((coord, idx) => {
-                    let vId = existing.vertexIds[idx];
-                    if (!vId) {
-                        vId = Date.now() + Math.random();
-                        existing.vertexIds.push(vId);
-                    }
-                    VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
-                    return vId;
-                });
-                existing.points = updated.points;
+            const ptsArr = (updated.points && Array.isArray(updated.points)) ? updated.points : existing.points || [];
+            while (existing.vertexIds.length < ptsArr.length) {
+                const newVid = generateVertexId();
+                existing.vertexIds.push(newVid);
+                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
             }
+            while (existing.vertexIds.length > ptsArr.length) {
+                existing.vertexIds.pop();
+            }
+
+            for (let i = 0; i < ptsArr.length; i++) {
+                const coord = ptsArr[i];
+                const vId = existing.vertexIds[i];
+                VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+            }
+            existing.points = existing.vertexIds.map(vId => {
+                const vx = VerticesStore.getById(vId);
+                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+            });
 
             if (updated.properties) {
                 existing.properties = updated.properties;

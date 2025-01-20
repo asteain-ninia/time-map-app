@@ -2,40 +2,35 @@
 /****************************************************
  * 点情報ストア
  *
- * 修正点:
- *   1) getAllPointsWithCoords() 新設:
- *      -> ストア内部データを走査し、各頂点の x,y を取得して
- *         "points: [...]" として付与した完全版のPointオブジェクトを返す
- *   2) addPoint / updatePoint 時に "points" フィールドも保持し、
- *      再読み込み後も geometry を持つように。
+ * 主な修正:
+ *   1) ID生成を「文字列化」し衝突・Float不一致を防止
+ *   2) addPoint / updatePoint で "points.length" と "vertexIds.length" を
+ *      常に合わせるようにし、頂点ストアとの不整合を回避
  ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import VerticesStore from './verticesStore.js';
+import stateManager from '../state/index.js';
+
+// ランダム頂点ID生成用
+function generateVertexId() {
+    return 'vx-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
+}
 
 const points = new Map();
 
-/**
- * 点情報に関する操作をまとめたモジュール
- * - geometry (座標) は頂点ストア(VerticesStore)で一元管理。
- * - pointオブジェクトは { id, properties:[], vertexIds:[] } などを持ち、
- *   座標は頂点IDを介して取得・更新する。
- */
 const PointsStore = {
 
     /**
-     * 指定年に表示すべきポイント一覧を取得
-     * @param {number} year
-     * @returns {Array} 年がyear以下のポイントのみ返す(geometryは {x,y}配列として付与)
+     * 指定年の points array
      */
     getPoints(year) {
         debugLog(4, `PointsStore.getPoints() が呼び出されました。year=${year}`);
         try {
             return Array.from(points.values())
                 .map(point => {
-                    // プロパティ
                     let props = null;
                     if (point.properties && Array.isArray(point.properties)) {
                         props = getPropertiesForYear(point.properties, year);
@@ -47,7 +42,6 @@ const PointsStore = {
                         };
                     }
 
-                    // 座標
                     let coords = [];
                     if (point.vertexIds && Array.isArray(point.vertexIds)) {
                         coords = point.vertexIds.map(vId => {
@@ -80,7 +74,6 @@ const PointsStore = {
         debugLog(4, 'PointsStore.getAllPointsWithCoords() が呼び出されました。');
         try {
             return Array.from(points.values()).map(pt => {
-                // vertexIdsから座標生成
                 let coords = [];
                 if (pt.vertexIds) {
                     coords = pt.vertexIds.map(vId => {
@@ -106,33 +99,44 @@ const PointsStore = {
     addPoint(point) {
         debugLog(4, `PointsStore.addPoint() が呼び出されました。point.id=${point?.id}`);
         try {
-            if (!point.properties) {
-                point.properties = [];
+            const st = stateManager.getState();
+            if (!point.id) {
+                point.id = 'pt-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
             }
 
-            // geometry: vertexIds が無ければ作成
-            if (!point.vertexIds || !Array.isArray(point.vertexIds) || point.vertexIds.length === 0) {
-                if (point.points && Array.isArray(point.points) && point.points.length > 0) {
-                    point.vertexIds = point.points.map(coord => {
-                        const newId = Date.now() + Math.random();
-                        VerticesStore.addVertex({ id: newId, x: coord.x || 0, y: coord.y || 0 });
-                        return newId;
-                    });
-                } else {
-                    // fallback
-                    const newId = Date.now() + Math.random();
-                    VerticesStore.addVertex({ id: newId, x: 0, y: 0 });
-                    point.vertexIds = [newId];
-                }
+            // プロパティのyearが無いなら currentYear を付与
+            if (!point.properties || point.properties.length === 0) {
+                point.properties = [{
+                    year: st.currentYear,
+                    name: point.name || '新しい点情報',
+                    description: point.description || ''
+                }];
             }
 
-            // pointsフィールドを同期
-            if (!point.points || !Array.isArray(point.points) || point.points.length === 0) {
-                point.points = point.vertexIds.map(vid => {
-                    const vx = VerticesStore.getById(vid);
-                    return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
-                });
+            // あとは頂点数合わせのロジック
+            if (!point.vertexIds) {
+                point.vertexIds = [];
             }
+            const ptsArr = (point.points && Array.isArray(point.points)) ? point.points : [];
+            while (point.vertexIds.length < ptsArr.length) {
+                const newVid = generateVertexId();
+                point.vertexIds.push(newVid);
+                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
+            }
+            while (point.vertexIds.length > ptsArr.length) {
+                point.vertexIds.pop();
+            }
+
+            for (let i = 0; i < ptsArr.length; i++) {
+                const coord = ptsArr[i];
+                const vId = point.vertexIds[i];
+                VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+            }
+
+            point.points = point.vertexIds.map(vId => {
+                const vx = VerticesStore.getById(vId);
+                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+            });
 
             points.set(point.id, point);
         } catch (error) {
@@ -154,24 +158,30 @@ const PointsStore = {
                 return;
             }
 
-            // 座標反映
-            if (updated.points && Array.isArray(updated.points)) {
-                // 頂点ストア更新
-                existing.vertexIds = updated.points.map((coord, idx) => {
-                    let vId = existing.vertexIds[idx];
-                    if (!vId) {
-                        vId = Date.now() + Math.random();
-                        existing.vertexIds.push(vId);
-                    }
-                    VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
-                    return vId;
-                });
+            // 同様に "points" の数に合わせて既存の vertexIds を調整
+            const ptsArr = (updated.points && Array.isArray(updated.points)) ? updated.points : existing.points || [];
+            while (existing.vertexIds.length < ptsArr.length) {
+                const newVid = generateVertexId();
+                existing.vertexIds.push(newVid);
+                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
+            }
+            while (existing.vertexIds.length > ptsArr.length) {
+                existing.vertexIds.pop();
             }
 
-            // points保持
-            existing.points = updated.points || existing.points;
+            // 頂点を更新
+            for (let i = 0; i < ptsArr.length; i++) {
+                const coord = ptsArr[i];
+                const vId = existing.vertexIds[i];
+                VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+            }
 
-            // properties
+            existing.points = existing.vertexIds.map(vId => {
+                const vx = VerticesStore.getById(vId);
+                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+            });
+
+            // プロパティなどを上書き
             if (updated.properties) {
                 existing.properties = updated.properties;
             }
@@ -194,7 +204,6 @@ const PointsStore = {
         debugLog(4, `PointsStore.removePoint() が呼び出されました。id=${id}`);
         try {
             points.delete(id);
-            // 頂点は共有検討中なので残す
         } catch (error) {
             debugLog(1, `PointsStore.removePoint() でエラー発生: ${error}`);
             showNotification('点情報の削除中にエラーが発生しました。', 'error');

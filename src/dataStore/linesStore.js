@@ -2,15 +2,20 @@
 /****************************************************
  * 線情報ストア
  *
- * 修正点:
- *   - getAllLinesWithCoords() 追加
- *   - addLine, updateLine 時にも "points" を同期保持
+ * 主な修正:
+ *   1) 頂点IDを常にstring化
+ *   2) addLine / updateLine 時に
+ *      "points" と "vertexIds" の数を正確に揃え、頂点ストアと同期
  ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import VerticesStore from './verticesStore.js';
+
+function generateVertexId() {
+    return 'vx-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
+}
 
 const lines = new Map();
 
@@ -57,9 +62,6 @@ const LinesStore = {
         }
     },
 
-    /**
-     * 保存用などで、すべてのラインを points付きで返す
-     */
     getAllLinesWithCoords() {
         debugLog(4, 'LinesStore.getAllLinesWithCoords() が呼び出されました。');
         try {
@@ -88,26 +90,36 @@ const LinesStore = {
             if (!line.properties) {
                 line.properties = [];
             }
-
-            if (!line.vertexIds || !Array.isArray(line.vertexIds) || line.vertexIds.length === 0) {
-                if (line.points && line.points.length > 0) {
-                    line.vertexIds = line.points.map(coord => {
-                        const vid = Date.now() + Math.random();
-                        VerticesStore.addVertex({ id: vid, x: coord.x || 0, y: coord.y || 0 });
-                        return vid;
-                    });
-                } else {
-                    line.vertexIds = [];
-                }
+            if (!line.id) {
+                line.id = 'ln-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
             }
 
-            // points フィールドも同期
-            if (!line.points || !Array.isArray(line.points)) {
-                line.points = line.vertexIds.map(vid => {
-                    const vx = VerticesStore.getById(vid);
-                    return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
-                });
+            if (!line.vertexIds) {
+                line.vertexIds = [];
             }
+
+            const ptsArr = (line.points && Array.isArray(line.points)) ? line.points : [];
+            // 頂点数合わせ
+            while (line.vertexIds.length < ptsArr.length) {
+                const newVid = generateVertexId();
+                line.vertexIds.push(newVid);
+                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
+            }
+            while (line.vertexIds.length > ptsArr.length) {
+                line.vertexIds.pop();
+            }
+
+            // 頂点ストア更新
+            for (let i = 0; i < ptsArr.length; i++) {
+                const coord = ptsArr[i];
+                const vId = line.vertexIds[i];
+                VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+            }
+
+            line.points = line.vertexIds.map(vId => {
+                const vx = VerticesStore.getById(vId);
+                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+            });
 
             lines.set(line.id, line);
         } catch (error) {
@@ -125,18 +137,26 @@ const LinesStore = {
                 return;
             }
 
-            if (updatedLine.points && Array.isArray(updatedLine.points)) {
-                existing.vertexIds = updatedLine.points.map((coord, idx) => {
-                    let vId = existing.vertexIds[idx];
-                    if (!vId) {
-                        vId = Date.now() + Math.random();
-                        existing.vertexIds.push(vId);
-                    }
-                    VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
-                    return vId;
-                });
-                existing.points = updatedLine.points;
+            const ptsArr = (updatedLine.points && Array.isArray(updatedLine.points)) ? updatedLine.points : existing.points || [];
+            while (existing.vertexIds.length < ptsArr.length) {
+                const newVid = generateVertexId();
+                existing.vertexIds.push(newVid);
+                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
             }
+            while (existing.vertexIds.length > ptsArr.length) {
+                existing.vertexIds.pop();
+            }
+
+            // 頂点を更新
+            for (let i = 0; i < ptsArr.length; i++) {
+                const coord = ptsArr[i];
+                const vId = existing.vertexIds[i];
+                VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+            }
+            existing.points = existing.vertexIds.map(vId => {
+                const vx = VerticesStore.getById(vId);
+                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+            });
 
             if (updatedLine.properties) {
                 existing.properties = updatedLine.properties;
@@ -156,7 +176,6 @@ const LinesStore = {
         debugLog(4, `LinesStore.removeLine() が呼び出されました。id=${id}`);
         try {
             lines.delete(id);
-            // 頂点削除は今後の共有機能次第で実装予定
         } catch (error) {
             debugLog(1, `LinesStore.removeLine() でエラー発生: ${error}`);
             showNotification('線情報の削除中にエラーが発生しました。', 'error');
