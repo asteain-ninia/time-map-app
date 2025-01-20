@@ -1,10 +1,10 @@
 // src/dataStore/polygonsStore.js
 /****************************************************
- * 面情報のストア
+ * 面情報ストア
  *
  * 修正点:
- *   - getPolygons(year) の戻り値から
- *     originalPolygon を除去し、循環参照を回避。
+ *   - getAllPolygonsWithCoords() 追加
+ *   - addPolygon, updatePolygon時に points 同期
  ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
@@ -20,52 +20,36 @@ const PolygonsStore = {
         debugLog(4, `PolygonsStore.getPolygons() が呼び出されました。year=${year}`);
         try {
             return Array.from(polygons.values())
-                .map(polygon => {
-                    let properties = null;
-                    if (polygon.properties && Array.isArray(polygon.properties)) {
-                        properties = getPropertiesForYear(polygon.properties, year);
+                .map(poly => {
+                    let props = null;
+                    if (poly.properties && Array.isArray(poly.properties)) {
+                        props = getPropertiesForYear(poly.properties, year);
                     } else {
-                        if (polygon.year !== undefined) {
-                            properties = {
-                                year: polygon.year,
-                                name: polygon.name,
-                                description: polygon.description,
-                            };
-                        } else {
-                            properties = {
-                                year: 0,
-                                name: polygon.name || '不明な面情報',
-                                description: polygon.description || '',
-                            };
-                        }
+                        props = {
+                            year: poly.year || 0,
+                            name: poly.name || '不明な面情報',
+                            description: poly.description || '',
+                        };
                     }
 
-                    // 頂点ストアから座標を取得
                     let coords = [];
-                    if (polygon.vertexIds && Array.isArray(polygon.vertexIds)) {
-                        coords = polygon.vertexIds.map(vId => {
-                            const vertex = VerticesStore.getById(vId);
-                            if (vertex) {
-                                return { x: vertex.x, y: vertex.y };
-                            }
-                            return { x: 0, y: 0 };
+                    if (poly.vertexIds && Array.isArray(poly.vertexIds)) {
+                        coords = poly.vertexIds.map(vId => {
+                            const vx = VerticesStore.getById(vId);
+                            return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
                         });
                     }
 
-                    if (properties) {
-                        return {
-                            id: polygon.id,
-                            vertexIds: polygon.vertexIds,
-                            properties: polygon.properties,
-                            // 循環参照を避けるため originalPolygon は付与しない
-                            points: coords,
-                            ...properties,
-                        };
-                    } else {
-                        return null;
-                    }
+                    if (!props) return null;
+                    return {
+                        id: poly.id,
+                        vertexIds: poly.vertexIds,
+                        properties: poly.properties,
+                        points: coords,
+                        ...props
+                    };
                 })
-                .filter(pg => pg !== null);
+                .filter(p => p !== null);
         } catch (error) {
             debugLog(1, `PolygonsStore.getPolygons() でエラー発生: ${error}`);
             showNotification('面情報の取得中にエラーが発生しました。', 'error');
@@ -73,76 +57,90 @@ const PolygonsStore = {
         }
     },
 
-    getAllPolygons() {
-        debugLog(4, `PolygonsStore.getAllPolygons() が呼び出されました。`);
+    getAllPolygonsWithCoords() {
+        debugLog(4, 'PolygonsStore.getAllPolygonsWithCoords() が呼び出されました。');
         try {
-            return Array.from(polygons.values());
+            return Array.from(polygons.values()).map(pg => {
+                let coords = [];
+                if (pg.vertexIds) {
+                    coords = pg.vertexIds.map(vId => {
+                        const vx = VerticesStore.getById(vId);
+                        return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+                    });
+                }
+                return {
+                    ...pg,
+                    points: coords
+                };
+            });
         } catch (error) {
-            debugLog(1, `PolygonsStore.getAllPolygons() でエラー発生: ${error}`);
-            showNotification('面情報の一覧取得中にエラーが発生しました。', 'error');
+            debugLog(1, `PolygonsStore.getAllPolygonsWithCoords() でエラー発生: ${error}`);
             return [];
         }
     },
 
-    /**
-     * 面情報を追加
-     * - polygon.vertexIds が無い場合は polygon.points などから頂点ストアへ登録
-     */
-    addPolygon(polygon) {
-        debugLog(4, `PolygonsStore.addPolygon() が呼び出されました。polygon.id=${polygon?.id}`);
+    addPolygon(poly) {
+        debugLog(4, `PolygonsStore.addPolygon() が呼び出されました。polygon.id=${poly?.id}`);
         try {
-            if (!polygon.properties || !Array.isArray(polygon.properties)) {
-                polygon.properties = [];
+            if (!poly.properties) {
+                poly.properties = [];
             }
 
-            if (!polygon.vertexIds || !Array.isArray(polygon.vertexIds) || polygon.vertexIds.length === 0) {
-                if (polygon.points && Array.isArray(polygon.points) && polygon.points.length > 0) {
-                    polygon.vertexIds = polygon.points.map(coord => {
-                        const newVid = Date.now() + Math.random();
-                        VerticesStore.addVertex({ id: newVid, x: coord.x || 0, y: coord.y || 0 });
-                        return newVid;
+            if (!poly.vertexIds || !Array.isArray(poly.vertexIds) || poly.vertexIds.length === 0) {
+                if (poly.points && Array.isArray(poly.points) && poly.points.length > 0) {
+                    poly.vertexIds = poly.points.map(coord => {
+                        const vid = Date.now() + Math.random();
+                        VerticesStore.addVertex({ id: vid, x: coord.x || 0, y: coord.y || 0 });
+                        return vid;
                     });
-                    delete polygon.points;
                 } else {
-                    polygon.vertexIds = [];
+                    poly.vertexIds = [];
                 }
             }
 
-            polygons.set(polygon.id, polygon);
+            // points フィールドを同期
+            if (!poly.points || !Array.isArray(poly.points)) {
+                poly.points = poly.vertexIds.map(vid => {
+                    const vx = VerticesStore.getById(vid);
+                    return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+                });
+            }
+
+            polygons.set(poly.id, poly);
         } catch (error) {
             debugLog(1, `PolygonsStore.addPolygon() でエラー発生: ${error}`);
             showNotification('面情報の追加中にエラーが発生しました。', 'error');
         }
     },
 
-    updatePolygon(updatedPolygon) {
-        debugLog(4, `PolygonsStore.updatePolygon() が呼び出されました。updatedPolygon.id=${updatedPolygon?.id}`);
+    updatePolygon(updated) {
+        debugLog(4, `PolygonsStore.updatePolygon() が呼び出されました。updatedPolygon.id=${updated?.id}`);
         try {
-            const existing = polygons.get(updatedPolygon.id);
+            const existing = polygons.get(updated.id);
             if (!existing) {
-                debugLog(3, `PolygonsStore.updatePolygon() - 更新対象の面情報が見つかりません。ID: ${updatedPolygon?.id}`);
+                debugLog(3, `PolygonsStore.updatePolygon() - 更新対象が見つかりません。ID: ${updated?.id}`);
                 return;
             }
 
-            if (updatedPolygon.points && Array.isArray(updatedPolygon.points)) {
-                existing.vertexIds = updatedPolygon.points.map((coord, idx) => {
-                    let vId;
-                    if (existing.vertexIds && existing.vertexIds[idx]) {
-                        vId = existing.vertexIds[idx];
-                        VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
-                    } else {
+            if (updated.points && Array.isArray(updated.points)) {
+                existing.vertexIds = updated.points.map((coord, idx) => {
+                    let vId = existing.vertexIds[idx];
+                    if (!vId) {
                         vId = Date.now() + Math.random();
-                        VerticesStore.addVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+                        existing.vertexIds.push(vId);
                     }
+                    VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
                     return vId;
                 });
-                delete updatedPolygon.points;
+                existing.points = updated.points;
             }
 
-            for (const key in updatedPolygon) {
-                if (key === 'id' || key === 'vertexIds') continue;
-                existing[key] = updatedPolygon[key];
+            if (updated.properties) {
+                existing.properties = updated.properties;
             }
+            if (updated.name !== undefined) existing.name = updated.name;
+            if (updated.description !== undefined) existing.description = updated.description;
+            if (updated.year !== undefined) existing.year = updated.year;
 
             polygons.set(existing.id, existing);
         } catch (error) {
@@ -161,16 +159,10 @@ const PolygonsStore = {
         }
     },
 
-    /**
-     * IDを指定してPolygonオブジェクトを取得
-     */
     getById(id) {
         debugLog(4, `PolygonsStore.getById() が呼び出されました。id=${id}`);
         try {
-            if (!polygons.has(id)) {
-                return null;
-            }
-            return polygons.get(id);
+            return polygons.get(id) || null;
         } catch (error) {
             debugLog(1, `PolygonsStore.getById() でエラー発生: ${error}`);
             return null;

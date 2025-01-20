@@ -1,23 +1,23 @@
 // src/dataStore/index.js
 /****************************************************
- *
  * DataStoreモジュール
- * 変更点:
- *  - 上記stores(PointsStore, LinesStore, PolygonsStore)が頂点ストアを参照する形になりましたが、
- *    DataStoreからの呼び出しには大きな変更はありません。
- *  - 全体としては、頂点管理の実態がVerticesStoreへ移行したため、ここでの座標参照は行わず、
- *    各Storeの getPoints() / getLines() / getPolygons() が返す座標を利用するだけ。
+ * 
+ * 修正点:
+ *  - getData(): verticesStore から頂点一覧を取得し "vertices:[...]" として含める。
+ *    また points/lines/polygons にも "points" を付与してエクスポートし、
+ *    ロード不要の単独ジオメトリも保持する。
+ *  - loadData(): 先に vertices を再登録し、その後 points/lines/polygons を再構築。
  ****************************************************/
 
 import stateManager from './../state/index.js';
 import PointsStore from './pointsStore.js';
 import LinesStore from './linesStore.js';
 import PolygonsStore from './polygonsStore.js';
+import VerticesStore from './verticesStore.js';
 import { debugLog } from '../utils/logger.js';
 import uiManager from '../ui/uiManager.js';
 import UndoRedoManager from '../utils/undoRedoManager.js';
 
-// 頂点ストアへの参照は本ファイルで直接は行わず、各storeに任せる。
 let unsavedChanges = false;
 
 const DataStore = {
@@ -36,7 +36,7 @@ const DataStore = {
     getAllPoints: () => {
         debugLog(4, `DataStore.getAllPoints() が呼び出されました。`);
         try {
-            return PointsStore.getAllPoints();
+            return PointsStore.getAllPointsWithCoords(); // 後述の新メソッド
         } catch (error) {
             debugLog(1, `DataStore.getAllPoints() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.getAllPoints() でエラーが発生しました: ${error}`, 'error');
@@ -108,7 +108,7 @@ const DataStore = {
     getAllLines: () => {
         debugLog(4, `DataStore.getAllLines() が呼び出されました。`);
         try {
-            return LinesStore.getAllLines();
+            return LinesStore.getAllLinesWithCoords();
         } catch (error) {
             debugLog(1, `DataStore.getAllLines() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.getAllLines() でエラーが発生しました。`, 'error');
@@ -180,7 +180,7 @@ const DataStore = {
     getAllPolygons: () => {
         debugLog(4, `DataStore.getAllPolygons() が呼び出されました。`);
         try {
-            return PolygonsStore.getAllPolygons();
+            return PolygonsStore.getAllPolygonsWithCoords();
         } catch (error) {
             debugLog(1, `DataStore.getAllPolygons() でエラー発生: ${error}`);
             uiManager.showNotification(`DataStore.getAllPolygons() でエラーが発生しました。`, 'error');
@@ -241,6 +241,7 @@ const DataStore = {
     clearData() {
         debugLog(3, 'DataStore.clearData() が呼び出されました。');
         try {
+            VerticesStore.clear();
             PointsStore.clear();
             LinesStore.clear();
             PolygonsStore.clear();
@@ -263,19 +264,24 @@ const DataStore = {
     loadData(data) {
         debugLog(3, 'DataStore.loadData() が呼び出されました。');
         try {
-            // Undo対象外
-            PointsStore.clear();
-            LinesStore.clear();
-            PolygonsStore.clear();
+            this.clearData();
 
+            // まず vertices を再構築
+            if (data.vertices && Array.isArray(data.vertices)) {
+                data.vertices.forEach((v) => {
+                    VerticesStore.addVertex(v);
+                });
+            }
+
+            // points, lines, polygons
             if (data.points) {
-                data.points.forEach((point) => {
-                    this.addPoint(point, false);
+                data.points.forEach((p) => {
+                    this.addPoint(p, false);
                 });
             }
             if (data.lines) {
-                data.lines.forEach((line) => {
-                    this.addLine(line, false);
+                data.lines.forEach((l) => {
+                    this.addLine(l, false);
                 });
             }
             if (data.polygons) {
@@ -283,6 +289,7 @@ const DataStore = {
                     this.addPolygon(polygon, false);
                 });
             }
+
             unsavedChanges = false;
         } catch (error) {
             debugLog(1, `DataStore.loadData() でエラー発生: ${error}`);
@@ -294,10 +301,19 @@ const DataStore = {
         debugLog(3, 'DataStore.getData() が呼び出されました。');
         try {
             const st = stateManager.getState();
+            // 頂点ストア
+            const allVertices = VerticesStore.getAllVertices();
+
+            // points/lines/polygons(全頂点付き)
+            const pts = this.getAllPoints();
+            const lns = this.getAllLines();
+            const pgs = this.getAllPolygons();
+
             return {
-                points: this.getAllPoints(),
-                lines: this.getAllLines(),
-                polygons: this.getAllPolygons(),
+                vertices: allVertices, // {id,x,y} の配列
+                points: pts,
+                lines: lns,
+                polygons: pgs,
                 metadata: {
                     sliderMin: st.sliderMin,
                     sliderMax: st.sliderMax,
