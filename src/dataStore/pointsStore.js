@@ -1,4 +1,11 @@
 // src/dataStore/pointsStore.js
+/****************************************************
+ * 点情報のストア
+ *
+ * 修正点:
+ *   - getPoints(year) が返すオブジェクトから
+ *     originalPoint を除去し、循環参照を回避。
+ ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
@@ -25,12 +32,11 @@ const PointsStore = {
         try {
             return Array.from(points.values())
                 .map(point => {
-                    // 年に応じたプロパティ取得
+                    // 年に応じたプロパティ
                     let properties = null;
                     if (point.properties && Array.isArray(point.properties)) {
                         properties = getPropertiesForYear(point.properties, year);
                     } else {
-                        // fallback (古い形式)
                         if (point.year !== undefined) {
                             properties = {
                                 year: point.year,
@@ -46,15 +52,15 @@ const PointsStore = {
                         }
                     }
 
-                    // 頂点ストアから座標を取得
+                    // 頂点座標
                     let coords = [];
-                    if (point.vertexIds && Array.isArray(point.vertexIds) && point.vertexIds.length > 0) {
+                    if (point.vertexIds && Array.isArray(point.vertexIds)) {
                         coords = point.vertexIds.map(vId => {
                             const vertex = VerticesStore.getById(vId);
                             if (vertex) {
                                 return { x: vertex.x, y: vertex.y };
                             }
-                            return { x: 0, y: 0 }; // fallback
+                            return { x: 0, y: 0 };
                         });
                     }
 
@@ -63,9 +69,7 @@ const PointsStore = {
                             id: point.id,
                             vertexIds: point.vertexIds,
                             properties: point.properties,
-                            originalPoint: point,
-                            // 以下、従来の renderer 等が使う用に geometryを展開
-                            // "points"キーに配列として{x,y}を持たせる (1点のみでも配列)
+                            // 循環参照を避けるため originalPoint は付与しない
                             points: coords,
                             ...properties,
                         };
@@ -109,24 +113,21 @@ const PointsStore = {
                 point.properties = [];
             }
 
-            // geometry変換: point.x, point.y or point.points → vertexIds
+            // geometry変換
             if (!point.vertexIds || !Array.isArray(point.vertexIds) || point.vertexIds.length === 0) {
-                // fallback: x,y がある場合は単一頂点として登録
-                if (point.x !== undefined && point.y !== undefined) {
-                    const newId = Date.now() + Math.random();
-                    VerticesStore.addVertex({ id: newId, x: point.x, y: point.y });
-                    point.vertexIds = [newId];
-                    delete point.x;
-                    delete point.y;
-                }
-                // あるいは point.points (複数頂点) だった場合 → 頂点ストアに登録
-                else if (point.points && Array.isArray(point.points) && point.points.length > 0) {
+                if (point.points && Array.isArray(point.points) && point.points.length > 0) {
                     point.vertexIds = point.points.map(coord => {
                         const newId = Date.now() + Math.random();
                         VerticesStore.addVertex({ id: newId, x: coord.x || 0, y: coord.y || 0 });
                         return newId;
                     });
                     delete point.points;
+                } else if (point.x !== undefined && point.y !== undefined) {
+                    const newId = Date.now() + Math.random();
+                    VerticesStore.addVertex({ id: newId, x: point.x, y: point.y });
+                    point.vertexIds = [newId];
+                    delete point.x;
+                    delete point.y;
                 } else {
                     // 完全に座標情報がなければ、とりあえず(0,0)を1つ作成
                     const newId = Date.now() + Math.random();
@@ -159,23 +160,8 @@ const PointsStore = {
                 return;
             }
 
-            // geometry変換があったら反映
-            if (updatedPoint.x !== undefined && updatedPoint.y !== undefined) {
-                // 単一点を更新する想定
-                let targetVid;
-                if (existing.vertexIds && existing.vertexIds.length > 0) {
-                    targetVid = existing.vertexIds[0];
-                } else {
-                    // 頂点がなければ追加
-                    targetVid = Date.now() + Math.random();
-                    existing.vertexIds = [targetVid];
-                }
-                VerticesStore.updateVertex({ id: targetVid, x: updatedPoint.x, y: updatedPoint.y });
-                delete updatedPoint.x;
-                delete updatedPoint.y;
-            } else if (updatedPoint.points && Array.isArray(updatedPoint.points)) {
-                // 複数頂点を再指定された場合
-                // ここでは既存頂点を使い回す or 差し替える 等、詳細ロジックは簡易にする
+            // geometry
+            if (updatedPoint.points && Array.isArray(updatedPoint.points)) {
                 existing.vertexIds = updatedPoint.points.map((coord, idx) => {
                     let vId;
                     if (existing.vertexIds[idx]) {
@@ -187,13 +173,21 @@ const PointsStore = {
                     }
                     return vId;
                 });
-                // 余っている頂点があれば削除するなどは省略 (簡易実装)
                 delete updatedPoint.points;
+            } else if (updatedPoint.x !== undefined && updatedPoint.y !== undefined) {
+                let targetVid;
+                if (existing.vertexIds && existing.vertexIds.length > 0) {
+                    targetVid = existing.vertexIds[0];
+                } else {
+                    targetVid = Date.now() + Math.random();
+                    existing.vertexIds = [targetVid];
+                }
+                VerticesStore.updateVertex({ id: targetVid, x: updatedPoint.x, y: updatedPoint.y });
+                delete updatedPoint.x;
+                delete updatedPoint.y;
             }
 
             // プロパティなどを上書き
-            // existing の各フィールドを updatedPoint で上書き
-            // ただし vertexIds は geometry変換すみなのでスキップ
             for (const key in updatedPoint) {
                 if (key === 'id' || key === 'vertexIds') continue;
                 existing[key] = updatedPoint[key];
@@ -214,9 +208,7 @@ const PointsStore = {
         debugLog(4, `PointsStore.removePoint() が呼び出されました。id=${id}`);
         try {
             points.delete(id);
-            // 頂点ストアの頂点を消すかどうかは、今後の共有頂点機能実装に合わせて対応予定。
-            // 当面は「他のオブジェクトと共有していない」と仮定できないため頂点は残す。
-            // （将来的には参照カウントが0になった頂点は削除するなどの処理を検討）
+            // 頂点は共有検討中なので残す
         } catch (error) {
             debugLog(1, `PointsStore.removePoint() でエラー発生: ${error}`);
             showNotification('点情報の削除中にエラーが発生しました。', 'error');

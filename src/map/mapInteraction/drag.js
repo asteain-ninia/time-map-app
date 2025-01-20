@@ -1,15 +1,19 @@
 // src/map/mapInteraction/drag.js
 /****************************************************
- * 頂点ドラッグ操作などを扱うモジュール
+ * 頂点ドラッグ処理
  * 
  * - ドラッグに伴う座標更新は feature.points[] に直接反映し、
  *   最終的に DataStore.updateLine() / DataStore.updatePolygon() 等で
  *   頂点ストア(VerticesStore)に書き戻される。
- * 
+ *
  * 修正点:
- *   1) dragOriginalShape のディープコピー時に originalLine/polygon/point を除去し、
- *      循環参照エラーを防ぐ。
- *   2) vertexDragged() などで feature.points[idx] が存在するかチェック。
+ *   - ドラッグ完了後、DataStore.updateXxx() したあとに
+ *     「再度 Store から読み直して selectedFeature を同期」し、
+ *     位置が変わった形状を反映するようにする。
+ *   - これにより頂点が動かない問題を解決。
+ *   - さらに JSON.stringify() 時の循環参照を回避するため
+ *     originalLine/polygon/point は一切付与せず、
+ *     safeDeepCopy() 内でも除外。
  ****************************************************/
 
 import stateManager from '../../state/index.js';
@@ -26,7 +30,7 @@ let dragOriginalShape = null;
 let isDraggingFeature = false;
 
 /**
- * ドラッグ中に頻繁に呼び出される再描画を間引くタイマー
+ * ドラッグ中に描画を間引く
  */
 let dragRenderTimeout = null;
 const DRAG_RENDER_DELAY = 50;
@@ -43,8 +47,7 @@ let enableMapZoomCallback = null;
 let renderDataCallback = null;
 
 /**
- * originalLine / originalPolygon / originalPoint などを除去して
- * 循環参照を防ぎつつディープコピーする関数
+ * originalLine / originalPolygon / originalPoint など除去したディープコピー
  */
 function safeDeepCopy(obj) {
     return JSON.parse(JSON.stringify(obj, (key, value) => {
@@ -53,14 +56,62 @@ function safeDeepCopy(obj) {
             key === 'originalPolygon' ||
             key === 'originalPoint'
         ) {
-            return undefined; // 除外して循環参照を回避
+            return undefined;
         }
         return value;
     }));
 }
 
 /**
- * 外部から disableMapZoom() を受け取り、当モジュールで保持
+ * ドラッグ完了後に store から最新を読み直して selectedFeature に再設定
+ */
+function reSyncSelectedFeature(featureId, type) {
+    let updated = null;
+    switch (type) {
+        case 'point':
+            updated = DataStore.getById(featureId);
+            if (updated) {
+                // getPoints(year) ではなく getById() はストア生データ
+                // なので geometryを復元してレンダリング用に変換:
+                // ただし drag後にすぐ geometryが必要なら
+                // DataStore.getPoints(currentYear) から探すのが早い場合も
+                // ここでは簡易に "point" なので getPoints()
+                const st = stateManager.getState();
+                const currentYear = st.currentYear || 0;
+                const allPoints = DataStore.getPoints(currentYear);
+                updated = allPoints.find(p => p.id === featureId) || null;
+            }
+            break;
+        case 'line':
+            updated = DataStore.getById(featureId);
+            if (updated) {
+                const st = stateManager.getState();
+                const currentYear = st.currentYear || 0;
+                const allLines = DataStore.getLines(currentYear);
+                updated = allLines.find(l => l.id === featureId) || null;
+            }
+            break;
+        case 'polygon':
+            updated = DataStore.getById(featureId);
+            if (updated) {
+                const st = stateManager.getState();
+                const currentYear = st.currentYear || 0;
+                const allPolygons = DataStore.getPolygons(currentYear);
+                updated = allPolygons.find(pg => pg.id === featureId) || null;
+            }
+            break;
+        default:
+            break;
+    }
+    if (updated) {
+        stateManager.setState({ selectedFeature: updated });
+    } else {
+        stateManager.setState({ selectedFeature: null, selectedVertices: [] });
+    }
+}
+
+/**
+ * 外部からの callback 設定
  */
 export function disableInteractionDragState(disableMapZoom, renderData) {
     if (disableMapZoom) {
@@ -158,34 +209,31 @@ export function vertexDragged(event, dData) {
         dData.dragStartX = transformedMouseX;
         dData.dragStartY = transformedMouseY;
 
-        const state = stateManager.getState();
-        const { selectedFeature, selectedVertices } = state;
+        const st = stateManager.getState();
+        const { selectedFeature, selectedVertices } = st;
         if (!selectedFeature || !selectedFeature.points) {
             return;
         }
 
         let allSelected = selectedVertices.filter(v => v.featureId === selectedFeature.id);
         if (allSelected.length === 0) {
-            // クリック頂点のみ
             allSelected = [{ featureId: selectedFeature.id, vertexIndex: dData.index }];
         }
 
         for (const pos of allSelected) {
             const pt = selectedFeature.points[pos.vertexIndex];
-            if (!pt) {
-                // 安全策: 頂点存在しなければスキップ
-                continue;
+            if (pt) {
+                pt.x += dx;
+                pt.y += dy;
             }
-            pt.x += dx;
-            pt.y += dy;
         }
 
-        // 中間更新 (shouldRecord=false)
-        if (state.currentTool === 'lineVertexEdit') {
+        // 中間更新
+        if (st.currentTool === 'lineVertexEdit') {
             DataStore.updateLine(selectedFeature, false);
-        } else if (state.currentTool === 'polygonVertexEdit') {
+        } else if (st.currentTool === 'polygonVertexEdit') {
             DataStore.updatePolygon(selectedFeature, false);
-        } else if (state.currentTool === 'pointMove') {
+        } else if (st.currentTool === 'pointMove') {
             if (selectedFeature.points.length === 1) {
                 DataStore.updatePoint(selectedFeature, false);
             }
@@ -235,6 +283,7 @@ export function vertexDragEnded(event, dData, feature) {
                     safeDeepCopy(feature)
                 );
                 UndoRedoManager.record(action);
+                reSyncSelectedFeature(feature.id, 'line');
 
             } else if (st.currentTool === 'polygonVertexEdit') {
                 DataStore.updatePolygon(feature, false);
@@ -244,6 +293,7 @@ export function vertexDragEnded(event, dData, feature) {
                     safeDeepCopy(feature)
                 );
                 UndoRedoManager.record(action);
+                reSyncSelectedFeature(feature.id, 'polygon');
 
             } else if (st.currentTool === 'pointMove') {
                 if (feature.points.length === 1) {
@@ -254,6 +304,7 @@ export function vertexDragEnded(event, dData, feature) {
                         safeDeepCopy(feature)
                     );
                     UndoRedoManager.record(action);
+                    reSyncSelectedFeature(feature.id, 'point');
                 }
             }
         }
@@ -278,7 +329,7 @@ export function vertexDragEnded(event, dData, feature) {
 }
 
 /**
- * エッジドラッグ開始 (新頂点挿入)
+ * エッジドラッグ開始(新頂点追加)
  */
 export function edgeDragStarted(event, dData, offsetX, feature) {
     debugLog(4, `edgeDragStarted() が呼び出されました。feature.id=${feature?.id}, offsetX=${offsetX}`);
@@ -305,14 +356,11 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
         // (除外で循環参照を回避)
         dragOriginalShape = safeDeepCopy(feature);
 
-        // 新しい頂点を挿入
-        if (!feature.points) {
-            feature.points = [];
-        }
-        const newX = dData.dragStartX;
-        const newY = dData.dragStartY;
-        // endIndexに挿入
-        feature.points.splice(dData.endIndex, 0, { x: newX, y: newY });
+        if (!feature.points) feature.points = [];
+        feature.points.splice(dData.endIndex, 0, {
+            x: dData.dragStartX,
+            y: dData.dragStartY
+        });
 
         isDraggingFeature = true;
         dData._dragged = true;
@@ -350,13 +398,12 @@ export function edgeDragged(event, dData) {
         const feature = st.selectedFeature;
         if (!feature || !feature.points) return;
 
-        if (!feature.points[dData.endIndex]) {
-            return; // 安全策
+        const pt = feature.points[dData.endIndex];
+        if (pt) {
+            pt.x += dx;
+            pt.y += dy;
         }
-        feature.points[dData.endIndex].x += dx;
-        feature.points[dData.endIndex].y += dy;
 
-        // 中間更新 (shouldRecord=false)
         if (st.currentTool === 'lineVertexEdit') {
             DataStore.updateLine(feature, false);
         } else if (st.currentTool === 'polygonVertexEdit') {
@@ -392,9 +439,7 @@ export function edgeDragEnded(event, dData, feature) {
         }
 
         const st = stateManager.getState();
-        if (!feature.points) {
-            return;
-        }
+        if (!feature.points) return;
 
         if (st.currentTool === 'lineVertexEdit') {
             DataStore.updateLine(feature, false);
@@ -404,6 +449,7 @@ export function edgeDragEnded(event, dData, feature) {
                 safeDeepCopy(feature)
             );
             UndoRedoManager.record(action);
+            reSyncSelectedFeature(feature.id, 'line');
 
         } else if (st.currentTool === 'polygonVertexEdit') {
             DataStore.updatePolygon(feature, false);
@@ -413,6 +459,7 @@ export function edgeDragEnded(event, dData, feature) {
                 safeDeepCopy(feature)
             );
             UndoRedoManager.record(action);
+            reSyncSelectedFeature(feature.id, 'polygon');
         }
 
         if (renderDataCallback) {
@@ -428,6 +475,7 @@ export function edgeDragEnded(event, dData, feature) {
         delete dData.dragStartY;
         delete dData._dragged;
         dragOriginalShape = null;
+
     } catch (error) {
         debugLog(1, `edgeDragEnded() でエラー発生: ${error}`);
     }

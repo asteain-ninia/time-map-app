@@ -1,4 +1,11 @@
 // src/dataStore/linesStore.js
+/****************************************************
+ * 線情報のストア
+ *
+ * 修正点:
+ *   - getLines(year) の戻り値から
+ *     originalLine を除去し、循環参照を回避。
+ ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
@@ -50,8 +57,7 @@ const LinesStore = {
                             id: line.id,
                             vertexIds: line.vertexIds,
                             properties: line.properties,
-                            originalLine: line,
-                            // Renderer等が使うために "points" として展開
+                            // 循環参照を避けるため originalLine は付与しない
                             points: coords,
                             ...properties,
                         };
@@ -118,7 +124,6 @@ const LinesStore = {
             const existing = lines.get(updatedLine.id);
             if (!existing) {
                 debugLog(3, `LinesStore.updateLine() - 更新対象の線情報が見つかりません。ID: ${updatedLine?.id}`);
-                console.warn('更新対象の線情報が見つかりません。ID:', updatedLine.id);
                 return;
             }
 

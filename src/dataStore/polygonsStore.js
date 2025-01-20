@@ -1,7 +1,13 @@
 // src/dataStore/polygonsStore.js
+/****************************************************
+ * 面情報のストア
+ *
+ * 修正点:
+ *   - getPolygons(year) の戻り値から
+ *     originalPolygon を除去し、循環参照を回避。
+ ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
-import stateManager from '../state/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import VerticesStore from './verticesStore.js';
@@ -51,8 +57,7 @@ const PolygonsStore = {
                             id: polygon.id,
                             vertexIds: polygon.vertexIds,
                             properties: polygon.properties,
-                            originalPolygon: polygon,
-                            // renderer 等が利用するために "points" として座標配列を付与
+                            // 循環参照を避けるため originalPolygon は付与しない
                             points: coords,
                             ...properties,
                         };
@@ -116,7 +121,6 @@ const PolygonsStore = {
             const existing = polygons.get(updatedPolygon.id);
             if (!existing) {
                 debugLog(3, `PolygonsStore.updatePolygon() - 更新対象の面情報が見つかりません。ID: ${updatedPolygon?.id}`);
-                console.warn('更新対象の面情報が見つかりません。ID:', updatedPolygon.id);
                 return;
             }
 
@@ -148,10 +152,9 @@ const PolygonsStore = {
     },
 
     removePolygon(id) {
-        debugLog(4, `PolygonsStore.removePolygon() が呼び出されました。id=${id},`);
+        debugLog(4, `PolygonsStore.removePolygon() が呼び出されました。id=${id}`);
         try {
             polygons.delete(id);
-            // 頂点削除は未実装
         } catch (error) {
             debugLog(1, `PolygonsStore.removePolygon() でエラー発生: ${error}`);
             showNotification('面情報の削除中にエラーが発生しました。', 'error');
