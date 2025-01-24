@@ -1,16 +1,13 @@
 // src/dataStore/polygonsStore.js
 /****************************************************
- * 面情報ストア
- *
- * 主な修正:
- *   - addPolygon / updatePolygon 時に
- *     points と vertexIds の数を揃える。
+ * 面情報のストア
  ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import VerticesStore from './verticesStore.js';
+import stateManager from '../state/index.js';
 
 function generateVertexId() {
     return 'vx-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
@@ -20,6 +17,10 @@ const polygons = new Map();
 
 const PolygonsStore = {
 
+    /**
+     * 指定年以下のプロパティを適用し、面情報を配列で返す
+     * @param {number} year
+     */
     getPolygons(year) {
         debugLog(4, `PolygonsStore.getPolygons() が呼び出されました。year=${year}`);
         try {
@@ -53,7 +54,7 @@ const PolygonsStore = {
                         ...props
                     };
                 })
-                .filter(p => p !== null);
+                .filter(pg => pg !== null);
         } catch (error) {
             debugLog(1, `PolygonsStore.getPolygons() でエラー発生: ${error}`);
             showNotification('面情報の取得中にエラーが発生しました。', 'error');
@@ -61,6 +62,9 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * 全面情報を返す (保存用) geometry含む
+     */
     getAllPolygonsWithCoords() {
         debugLog(4, 'PolygonsStore.getAllPolygonsWithCoords() が呼び出されました。');
         try {
@@ -83,14 +87,25 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * 面情報を追加
+     * @param {Object} poly
+     */
     addPolygon(poly) {
         debugLog(4, `PolygonsStore.addPolygon() が呼び出されました。polygon.id=${poly?.id}`);
         try {
-            if (!poly.properties) {
-                poly.properties = [];
-            }
+            const st = stateManager.getState();
             if (!poly.id) {
                 poly.id = 'pg-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
+            }
+
+            // properties が無ければ currentYear を付与
+            if (!poly.properties || poly.properties.length === 0) {
+                poly.properties = [{
+                    year: st.currentYear,
+                    name: poly.name || '新しい面情報',
+                    description: poly.description || ''
+                }];
             }
 
             if (!poly.vertexIds) {
@@ -125,6 +140,10 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * 面情報を更新
+     * @param {Object} updated
+     */
     updatePolygon(updated) {
         debugLog(4, `PolygonsStore.updatePolygon() が呼び出されました。updatedPolygon.id=${updated?.id}`);
         try {

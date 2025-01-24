@@ -1,12 +1,6 @@
 // src/map/mapRenderer/index.js
 /****************************************************
- * マップの読み込み、描画、ズーム操作など
- *
- * 修正点:
- *   1) ドラッグ中の循環参照エラーを防ぐため、mapInteraction/drag.js 側と合わせて
- *      originalLine/originalPolygon/originalPoint を扱わないようにする。
- *   2) クリック時に選択されるオブジェクトは「レンダリング用オブジェクト (pointsなどを直接持つ)」。
- *   3) 頂点ハンドルやエッジハンドルが正常に描画されるように調整。
+ * マップ描画のメインモジュール
  ****************************************************/
 
 import stateManager from '../../state/index.js';
@@ -46,6 +40,10 @@ export const colorScheme = {
     tempPointFill: 'orange',
 };
 
+/**
+ * 現在のズーム係数を返す
+ * @returns {number}
+ */
 export function getCurrentZoomScale() {
     try {
         if (!svg) return 1;
@@ -57,6 +55,13 @@ export function getCurrentZoomScale() {
     }
 }
 
+/**
+ * 地図を読み込み、SVGを配置する
+ * @param {*} _DataStore
+ * @param {*} _UI
+ * @param {*} renderDataFunc
+ * @returns {Promise}
+ */
 export function loadMap(_DataStore, _UI, renderDataFunc) {
     debugLog(4, 'loadMap() が呼び出されました。');
     try {
@@ -162,6 +167,10 @@ export function loadMap(_DataStore, _UI, renderDataFunc) {
     }
 }
 
+/**
+ * 全データを再描画する
+ *  - ドラッグ中の中間updateも反映
+ */
 export function renderData() {
     debugLog(4, 'renderData() が呼び出されました。');
     try {
@@ -173,31 +182,32 @@ export function renderData() {
         const dataGroup = zoomGroup.append('g').attr('class', 'data-group');
 
         const currentYear = st.currentYear || 0;
+        // 最新の store データを取得
         let points = MapModuleDataStore.getPoints(currentYear);
         let lines = MapModuleDataStore.getLines(currentYear);
         let polygons = MapModuleDataStore.getPolygons(currentYear);
 
+        // ID割り振りが無いものには一応IDをつける(念のため)
         points.forEach((p) => {
-            if (!p.id) p.id = Date.now() + Math.random();
+            if (!p.id) p.id = 'pt-unknown-' + Math.random();
         });
         lines.forEach((l) => {
-            if (!l.id) l.id = Date.now() + Math.random();
+            if (!l.id) l.id = 'ln-unknown-' + Math.random();
         });
         polygons.forEach((pg) => {
-            if (!pg.id) pg.id = Date.now() + Math.random();
+            if (!pg.id) pg.id = 'pg-unknown-' + Math.random();
         });
 
-        // ポリゴンなのに頂点数が2しかない場合 → ラインとして扱う
+        // 頂点数2のポリゴンはライン扱いに
         const polygonsToLine = polygons.filter((pg) => pg.points && pg.points.length === 2);
         polygons = polygons.filter((pg) => !(pg.points && pg.points.length === 2));
 
         lines = lines.filter((l) => l.points && l.points.length >= 2);
         polygons = polygons.filter((pg) => pg.points && pg.points.length >= 3);
 
-        // 上記で弾かれたポリゴンをライン扱いに追加
+        // ポリゴンなのに2頂点しかないものをライン扱いに転換
         lines.push(...polygonsToLine.map((pg) => ({
-            ...pg,
-            // originalLine: pg.originalPolygon || pg  → 循環参照を呼ぶ可能性があるため使用しない
+            ...pg
         })));
 
         const k = getCurrentZoomScale();
@@ -207,7 +217,7 @@ export function renderData() {
         let allAdjustedLines = [];
         let allAdjustedPolygons = [];
 
-        // 地図を複数横に並べる ( -2~2 )
+        // 横方向にマップをコピー
         mapCopies.forEach((offset) => {
             const offsetX = offset * mapWidth;
             try {
@@ -215,7 +225,7 @@ export function renderData() {
                 allAdjustedPoints.push(
                     ...points.map((pt) => {
                         const dup = { ...pt };
-                        dup.points = (dup.points || []).map((p) => ({
+                        dup.points = dup.points.map((p) => ({
                             x: p.x + offsetX,
                             y: p.y
                         }));
@@ -226,7 +236,7 @@ export function renderData() {
                 allAdjustedLines.push(
                     ...lines.map((ln) => {
                         const dup = { ...ln };
-                        dup.points = (dup.points || []).map((p) => ({
+                        dup.points = dup.points.map((p) => ({
                             x: p.x + offsetX,
                             y: p.y
                         }));
@@ -237,7 +247,7 @@ export function renderData() {
                 allAdjustedPolygons.push(
                     ...polygons.map((pg) => {
                         const dup = { ...pg };
-                        dup.points = (dup.points || []).map((p) => ({
+                        dup.points = dup.points.map((p) => ({
                             x: p.x + offsetX,
                             y: p.y
                         }));
@@ -245,37 +255,39 @@ export function renderData() {
                     })
                 );
             } catch (error) {
-                debugLog(1, `mapCopies offset=${offset} でエラー: ${error}`);
+                debugLog(1, `renderData() の mapCopies offset=${offset} でエラー発生: ${error}`);
             }
         });
 
-        // 実際の描画処理
+        // ポリゴン描画
         drawPolygons(dataGroup, allAdjustedPolygons, k);
+
+        // ライン描画
         drawLines(dataGroup, allAdjustedLines, k);
+
+        // ポイント描画
         drawPoints(dataGroup, allAdjustedPoints, k);
 
-        // 追加モードで描画中の要素 (仮線/仮ポリゴンなど)
+        // 追加モード中の一時描画
         if (st.isDrawing) {
             drawTemporaryFeatures(st);
         }
 
-        // 選択中フィーチャに頂点ハンドルを描画 (編集モード時)
+        // 選択されたフィーチャに頂点ハンドル/エッジハンドルを表示
         const selectedFeature = st.selectedFeature;
         if (st.isEditMode && selectedFeature && selectedFeature.points && selectedFeature.points.length > 0) {
             if (st.currentTool === 'pointMove' && selectedFeature.points.length === 1) {
-                // 単一点 → ドラッグで移動可能
                 drawVertexHandles(dataGroup, selectedFeature);
             } else if (
                 st.currentTool === 'lineVertexEdit' ||
                 st.currentTool === 'polygonVertexEdit'
             ) {
-                // 頂点ハンドルとエッジハンドルを表示
                 drawVertexHandles(dataGroup, selectedFeature);
                 drawEdgeHandles(dataGroup, selectedFeature);
             }
         }
     } catch (error) {
-        debugLog(1, `renderData() でエラー: ${error}`);
+        debugLog(1, `renderData() でエラー発生: ${error}`);
     }
 }
 
@@ -313,24 +325,23 @@ function drawPolygons(dataGroup, polygons, k) {
                     try {
                         event.stopPropagation();
                         debugLog(4, `polygon click: polygon.id=${d?.id}`);
-                        const cst = stateManager.getState();
+                        const st = stateManager.getState();
 
                         const pageX = event.sourceEvent ? event.sourceEvent.pageX : event.pageX;
                         const pageY = event.sourceEvent ? event.sourceEvent.pageY : event.pageY;
 
-                        if (cst.isAddMode) {
-                            // 特に何もしない
-                        } else if (cst.isEditMode) {
-                            if (cst.currentTool === 'polygonAttributeEdit') {
+                        if (st.isAddMode) {
+                            // do nothing
+                        } else if (st.isEditMode) {
+                            if (st.currentTool === 'polygonAttributeEdit') {
                                 stateManager.setState({ selectedFeature: d });
                                 renderData();
                                 showPolygonEditForm(d, renderData, false, true, pageX, pageY);
-                            } else if (cst.currentTool === 'polygonVertexEdit') {
+                            } else if (st.currentTool === 'polygonVertexEdit') {
                                 stateManager.setState({ selectedFeature: d, selectedVertices: [] });
                                 renderData();
                             }
                         } else {
-                            // 閲覧モードの場合 → 詳細ウィンドウ
                             showDetailWindow(d, pageX, pageY);
                         }
                     } catch (error) {
@@ -376,19 +387,19 @@ function drawLines(dataGroup, lines, k) {
                     try {
                         event.stopPropagation();
                         debugLog(4, `line click: line.id=${d?.id}`);
-                        const cst = stateManager.getState();
+                        const st = stateManager.getState();
 
                         const pageX = event.sourceEvent ? event.sourceEvent.pageX : event.pageX;
                         const pageY = event.sourceEvent ? event.sourceEvent.pageY : event.pageY;
 
-                        if (cst.isAddMode) {
-                            // 特に何もしない
-                        } else if (cst.isEditMode) {
-                            if (cst.currentTool === 'lineAttributeEdit') {
+                        if (st.isAddMode) {
+                            // do nothing
+                        } else if (st.isEditMode) {
+                            if (st.currentTool === 'lineAttributeEdit') {
                                 stateManager.setState({ selectedFeature: d });
                                 renderData();
                                 showLineEditForm(d, renderData, false, true, pageX, pageY);
-                            } else if (cst.currentTool === 'lineVertexEdit') {
+                            } else if (st.currentTool === 'lineVertexEdit') {
                                 stateManager.setState({ selectedFeature: d, selectedVertices: [] });
                                 renderData();
                             }
@@ -432,19 +443,19 @@ function drawPoints(dataGroup, points, k) {
                     try {
                         event.stopPropagation();
                         debugLog(4, `point click: point.id=${d?.id}`);
-                        const cst = stateManager.getState();
+                        const st = stateManager.getState();
 
                         const pageX = event.sourceEvent ? event.sourceEvent.pageX : event.pageX;
                         const pageY = event.sourceEvent ? event.sourceEvent.pageY : event.pageY;
 
-                        if (cst.isAddMode) {
-                            // 特に何もしない
-                        } else if (cst.isEditMode) {
-                            if (cst.currentTool === 'pointAttributeEdit') {
+                        if (st.isAddMode) {
+                            // do nothing
+                        } else if (st.isEditMode) {
+                            if (st.currentTool === 'pointAttributeEdit') {
                                 stateManager.setState({ selectedFeature: d });
                                 renderData();
                                 showEditForm(d, renderData, pageX, pageY);
-                            } else if (cst.currentTool === 'pointMove') {
+                            } else if (st.currentTool === 'pointMove') {
                                 stateManager.setState({ selectedFeature: d, selectedVertices: [] });
                                 renderData();
                             }
@@ -463,8 +474,7 @@ function drawPoints(dataGroup, points, k) {
 }
 
 /**
- * 追加モードの際に描画する一時的な
- * ライン／ポリゴン／ポイントなど
+ * 追加モード中の仮描画 (ライン/ポリゴン/ポイント)
  */
 function drawTemporaryFeatures(state) {
     debugLog(4, 'drawTemporaryFeatures() が呼び出されました。');
@@ -493,7 +503,7 @@ function drawTemporaryFeatures(state) {
                         className: `tempLine-${offset}`,
                         elementType: 'path',
                         attributes: {
-                            d: (dd) => d3.line().x((pp) => pp.x).y((pp) => pp.y)(dd)
+                            d: (dd) => d3.line().x(pp => pp.x).y(pp => pp.y)(dd)
                         },
                         style: {
                             stroke: colorScheme.tempLineStroke,
@@ -502,7 +512,6 @@ function drawTemporaryFeatures(state) {
                             'vector-effect': 'non-scaling-stroke'
                         }
                     });
-                    // 頂点の円
                     drawTemporaryFeature(tempGroup, {
                         data: arr,
                         className: `tempPoint-${offset}`,
@@ -517,9 +526,9 @@ function drawTemporaryFeatures(state) {
                             'vector-effect': 'non-scaling-stroke'
                         }
                     });
-
-                    // ポリゴン追加中
-                } else if (state.currentTool === 'polygon' && state.tempPolygonPoints && state.tempPolygonPoints.length > 0) {
+                }
+                // ポリゴン追加中
+                else if (state.currentTool === 'polygon' && state.tempPolygonPoints && state.tempPolygonPoints.length > 0) {
                     const arr = state.tempPolygonPoints.map((p) => ({
                         x: p.x + offsetX,
                         y: p.y
@@ -531,8 +540,8 @@ function drawTemporaryFeatures(state) {
                         attributes: {
                             d: (dd) =>
                                 d3.line()
-                                    .x((pp) => pp.x)
-                                    .y((pp) => pp.y)
+                                    .x(pp => pp.x)
+                                    .y(pp => pp.y)
                                     .curve(d3.curveLinearClosed)(dd)
                         },
                         style: {
@@ -556,9 +565,9 @@ function drawTemporaryFeatures(state) {
                             'vector-effect': 'non-scaling-stroke'
                         }
                     });
-
-                    // ポイント追加中
-                } else if (state.currentTool === 'point' && state.tempPoint) {
+                }
+                // 点追加中
+                else if (state.currentTool === 'point' && state.tempPoint) {
                     const arr = [{ x: state.tempPoint.x + offsetX, y: state.tempPoint.y }];
                     drawTemporaryFeature(tempGroup, {
                         data: arr,

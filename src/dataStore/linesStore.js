@@ -1,17 +1,14 @@
 // src/dataStore/linesStore.js
 /****************************************************
- * 線情報ストア
+ * 線情報（複数頂点）のデータストア
  *
- * 主な修正:
- *   1) 頂点IDを常にstring化
- *   2) addLine / updateLine 時に
- *      "points" と "vertexIds" の数を正確に揃え、頂点ストアと同期
  ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import VerticesStore from './verticesStore.js';
+import stateManager from '../state/index.js';
 
 function generateVertexId() {
     return 'vx-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
@@ -21,6 +18,11 @@ const lines = new Map();
 
 const LinesStore = {
 
+    /**
+     * 線を取得 (指定年以下のプロパティを適用)
+     * @param {number} year
+     * @returns {Array} {id, points[], properties, ...}
+     */
     getLines(year) {
         debugLog(4, `LinesStore.getLines() が呼び出されました。year=${year}`);
         try {
@@ -62,6 +64,9 @@ const LinesStore = {
         }
     },
 
+    /**
+     * 全ラインを返す(保存用) geometry付き
+     */
     getAllLinesWithCoords() {
         debugLog(4, 'LinesStore.getAllLinesWithCoords() が呼び出されました。');
         try {
@@ -84,14 +89,25 @@ const LinesStore = {
         }
     },
 
+    /**
+     * 線を追加
+     * @param {Object} line
+     */
     addLine(line) {
         debugLog(4, `LinesStore.addLine() が呼び出されました。line.id=${line?.id}`);
         try {
-            if (!line.properties) {
-                line.properties = [];
-            }
+            const st = stateManager.getState();
             if (!line.id) {
                 line.id = 'ln-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
+            }
+
+            // propertiesが無いなら currentYearを付与
+            if (!line.properties || line.properties.length === 0) {
+                line.properties = [{
+                    year: st.currentYear,
+                    name: line.name || '新しい線情報',
+                    description: line.description || ''
+                }];
             }
 
             if (!line.vertexIds) {
@@ -116,6 +132,7 @@ const LinesStore = {
                 VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
             }
 
+            // points再生成
             line.points = line.vertexIds.map(vId => {
                 const vx = VerticesStore.getById(vId);
                 return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
@@ -128,6 +145,10 @@ const LinesStore = {
         }
     },
 
+    /**
+     * 線を更新 (ドラッグ中 / 最終確定など)
+     * @param {Object} updatedLine
+     */
     updateLine(updatedLine) {
         debugLog(4, `LinesStore.updateLine() が呼び出されました。updatedLine.id=${updatedLine?.id}`);
         try {
@@ -137,7 +158,11 @@ const LinesStore = {
                 return;
             }
 
-            const ptsArr = (updatedLine.points && Array.isArray(updatedLine.points)) ? updatedLine.points : existing.points || [];
+            // geometry
+            const ptsArr = (updatedLine.points && Array.isArray(updatedLine.points))
+                ? updatedLine.points
+                : existing.points || [];
+
             while (existing.vertexIds.length < ptsArr.length) {
                 const newVid = generateVertexId();
                 existing.vertexIds.push(newVid);
@@ -147,17 +172,18 @@ const LinesStore = {
                 existing.vertexIds.pop();
             }
 
-            // 頂点を更新
             for (let i = 0; i < ptsArr.length; i++) {
                 const coord = ptsArr[i];
                 const vId = existing.vertexIds[i];
                 VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
             }
+
             existing.points = existing.vertexIds.map(vId => {
                 const vx = VerticesStore.getById(vId);
                 return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
             });
 
+            // プロパティ
             if (updatedLine.properties) {
                 existing.properties = updatedLine.properties;
             }
@@ -182,6 +208,11 @@ const LinesStore = {
         }
     },
 
+    /**
+     * 指定IDの線を取得
+     * @param {string} id
+     * @returns {Object|null}
+     */
     getById(id) {
         debugLog(4, `LinesStore.getById() が呼び出されました。id=${id}`);
         try {
