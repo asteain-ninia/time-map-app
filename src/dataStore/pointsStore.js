@@ -119,6 +119,17 @@ const PointsStore = {
                 point.vertexIds = [];
             }
 
+            // points が未定義、または空の場合は、tempPoint の座標を使用する
+            if (!point.points || point.points.length === 0) {
+                const tempPoint = stateManager.getState().tempPoint;
+                if (tempPoint) {
+                    point.points = [tempPoint]; // tempPoint を points として設定
+                } else {
+                    point.points = [{ x: 0, y: 0 }]; // デフォルト座標を設定 (念のため)
+                }
+            }
+
+
             const ptsArr = (point.points && Array.isArray(point.points)) ? point.points : [];
             // 頂点数合わせ
             while (point.vertexIds.length < ptsArr.length) {
