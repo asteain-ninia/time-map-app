@@ -44,13 +44,29 @@ const PolygonsStore = {
                             return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
                         });
                     }
+                    // holes 座標も同様に処理
+                    let holesCoords = [];
+                    if (poly.holesVertexIds && Array.isArray(poly.holesVertexIds)) {
+                        holesCoords = poly.holesVertexIds.map(holeVIds => {
+                            if (Array.isArray(holeVIds)) {
+                                return holeVIds.map(vId => {
+                                    const vx = VerticesStore.getById(vId);
+                                    return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+                                });
+                            }
+                            return []; // holeVIds が配列でない場合は空配列
+                        });
+                    }
+
 
                     if (!props) return null;
                     return {
                         id: poly.id,
                         vertexIds: poly.vertexIds,
+                        holesVertexIds: poly.holesVertexIds, // ★ holes頂点IDリスト
                         properties: poly.properties,
                         points: coords,
+                        holes: holesCoords, // ★ holes座標リスト
                         ...props
                     };
                 })
@@ -76,9 +92,23 @@ const PolygonsStore = {
                         return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
                     });
                 }
+                // holes 座標も同様に処理
+                let holesCoords = [];
+                if (pg.holesVertexIds) {
+                    holesCoords = pg.holesVertexIds.map(holeVIds => {
+                        if (Array.isArray(holeVIds)) {
+                            return holeVIds.map(vId => {
+                                const vx = VerticesStore.getById(vId);
+                                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+                            });
+                        }
+                        return []; // holeVIds が配列でない場合は空配列
+                    });
+                }
                 return {
                     ...pg,
-                    points: coords
+                    points: coords,
+                    holes: holesCoords,
                 };
             });
         } catch (error) {
@@ -111,6 +141,10 @@ const PolygonsStore = {
             if (!poly.vertexIds) {
                 poly.vertexIds = [];
             }
+            // holes 用 vertexIds
+            if (!poly.holesVertexIds) {
+                poly.holesVertexIds = [];
+            }
 
             const ptsArr = (poly.points && Array.isArray(poly.points)) ? poly.points : [];
             while (poly.vertexIds.length < ptsArr.length) {
@@ -133,6 +167,33 @@ const PolygonsStore = {
                 return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
             });
 
+            // holes 処理
+            if (poly.holes && Array.isArray(poly.holes)) {
+                poly.holesVertexIds = poly.holes.map(holePoints => {
+                    if (Array.isArray(holePoints)) {
+                        const holeVIds = [];
+                        holePoints.forEach(p => {
+                            const newVid = generateVertexId();
+                            holeVIds.push(newVid);
+                            VerticesStore.addVertex({ id: newVid, x: p.x || 0, y: p.y || 0 });
+                        });
+                        return holeVIds;
+                    }
+                    return []; // holePoints が配列でなければ空配列
+                });
+                // holes 座標再生成
+                poly.holes = poly.holesVertexIds.map(holeVIds => {
+                    return holeVIds.map(vId => {
+                        const vx = VerticesStore.getById(vId);
+                        return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+                    });
+                });
+            } else {
+                poly.holes = [];
+                poly.holesVertexIds = [];
+            }
+
+
             polygons.set(poly.id, poly);
         } catch (error) {
             debugLog(1, `PolygonsStore.addPolygon() でエラー発生: ${error}`);
@@ -153,6 +214,7 @@ const PolygonsStore = {
                 return;
             }
 
+            // points (outer boundary)
             const ptsArr = (updated.points && Array.isArray(updated.points)) ? updated.points : existing.points || [];
             while (existing.vertexIds.length < ptsArr.length) {
                 const newVid = generateVertexId();
@@ -162,7 +224,6 @@ const PolygonsStore = {
             while (existing.vertexIds.length > ptsArr.length) {
                 existing.vertexIds.pop();
             }
-
             for (let i = 0; i < ptsArr.length; i++) {
                 const coord = ptsArr[i];
                 const vId = existing.vertexIds[i];
@@ -172,6 +233,40 @@ const PolygonsStore = {
                 const vx = VerticesStore.getById(vId);
                 return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
             });
+
+            // holes
+            if (updated.holes && Array.isArray(updated.holes)) {
+                existing.holesVertexIds = updated.holes.map((holePoints, holeIndex) => {
+                    if (Array.isArray(holePoints)) {
+                        let holeVIds = existing.holesVertexIds[holeIndex];
+                        if (!holeVIds) holeVIds = []; // holeVIds がまだない場合は初期化
+
+                        while (holeVIds.length < holePoints.length) {
+                            const newVid = generateVertexId();
+                            holeVIds.push(newVid);
+                            VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
+                        }
+                        while (holeVIds.length > holePoints.length) {
+                            holeVIds.pop();
+                        }
+                        for (let i = 0; i < holePoints.length; i++) {
+                            const coord = holePoints[i];
+                            const vId = holeVIds[i];
+                            VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
+                        }
+                        return holeVIds;
+                    }
+                    return existing.holesVertexIds[holeIndex] || []; // holePoints が配列でなければ既存のIDを維持、なければ空配列
+                });
+                // holes 座標再生成
+                existing.holes = existing.holesVertexIds.map(holeVIds => {
+                    return holeVIds.map(vId => {
+                        const vx = VerticesStore.getById(vId);
+                        return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
+                    });
+                });
+            }
+
 
             if (updated.properties) {
                 existing.properties = updated.properties;

@@ -222,7 +222,7 @@ const DataStore = {
     },
 
     removePolygon: (id, shouldRecord = false) => {
-        debugLog(4, `DataStore.removePolygon() が呼び出されました。id=${id}, shouldRecord=${shouldRecord}`);
+        debugLog(4, `DataStore.removePolygon() が呼び出されました。polygon.id=${id}, shouldRecord=${shouldRecord}`);
         try {
             const oldObj = PolygonsStore.getById(id);
             PolygonsStore.removePolygon(id);
@@ -286,7 +286,20 @@ const DataStore = {
             }
             if (data.polygons) {
                 data.polygons.forEach((polygon) => {
-                    this.addPolygon(polygon, false);
+                    // holes 構造を考慮してロード
+                    const pg = { ...polygon };
+                    if (pg.holes && Array.isArray(pg.holes)) {
+                        pg.holes = pg.holes.map(hole => {
+                            if (Array.isArray(hole)) {
+                                return hole; // holes はそのまま
+                            } else {
+                                return []; // 不正なholeデータは空配列に
+                            }
+                        });
+                    } else {
+                        pg.holes = []; // holes プロパティがない場合は空配列で初期化
+                    }
+                    this.addPolygon(pg, false);
                 });
             }
 
@@ -310,6 +323,7 @@ const DataStore = {
             const pgs = this.getAllPolygons();
 
             return {
+                version: '2.0', // ★ データ形式バージョンを追記
                 vertices: allVertices, // {id,x,y} の配列
                 points: pts,
                 lines: lns,
