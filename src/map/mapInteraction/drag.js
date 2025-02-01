@@ -9,33 +9,18 @@ import tooltips from '../../ui/tooltips.js';
 import { debugLog } from '../../utils/logger.js';
 import UndoRedoManager from '../../utils/undoRedoManager.js';
 import { getFeatureTooltipData } from './selection.js';
-import { polygonsOverlap } from '../../utils/geometryUtils.js';
+import { polygonsOverlap, pointInPolygon } from '../../utils/geometryUtils.js';
 
-/**
- * ドラッグ前の形状を保持するための変数。
- */
-let dragOriginalShape = null;
+let dragOriginalShape = null; // ドラッグ前の形状を保持するための変数
+let isDraggingFeature = false; // ドラッグ中かどうかのフラグ
+let dragRenderTimeout = null;  // ドラッグ中の頻繁な再描画を間引くためのタイマー
+const DRAG_RENDER_DELAY = 50;  // 再描画遅延時間
 
-/**
- * ドラッグ中かどうかのフラグ
- */
-let isDraggingFeature = false;
-
-/**
- * ドラッグ中の頻繁な再描画を間引くためのタイマー
- */
-let dragRenderTimeout = null;
-const DRAG_RENDER_DELAY = 50;
-
-/**
- * 地図ズーム無効化／有効化用コールバック
- */
+// 地図ズーム無効化／有効化用コールバック
 let disableMapZoomCallback = null;
 let enableMapZoomCallback = null;
 
-/**
- * 再描画コールバック (renderData)
- */
+// 再描画コールバック (renderData)
 let renderDataCallback = null;
 
 /**
@@ -52,7 +37,7 @@ function safeDeepCopy(obj) {
 }
 
 /**
- * ドラッグ中の再描画を間引きする
+ * ドラッグ中の再描画を間引く
  */
 function throttledRenderDuringDrag() {
     try {
@@ -107,14 +92,18 @@ export function vertexDragStarted(event, dData, offsetX, feature) {
         dData._dragged = false;
         // 初回ドラッグ時、各頂点の有効な候補位置を記録するためのオブジェクトを初期化
         dData.lastValidCandidates = {};
+        // スナップ状態関連のプロパティを初期化
+        dData.snapPolygonId = null;
+        dData.snapCandidate = null;
+        dData.snapEdgeA = null;
+        dData.snapEdgeB = null;
 
-        // ドラッグ開始位置を記録
+        // ドラッグ開始時点の形状をバックアップ
         const transform = d3.zoomTransform(d3.select('#map svg').node());
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
 
-        // ドラッグ開始時点の形状をバックアップ
         dragOriginalShape = safeDeepCopy(feature);
 
         isDraggingFeature = true;
@@ -144,108 +133,135 @@ export function vertexDragged(event, dData) {
         const dx = transform.invertX(mouseX) - dData.dragStartX;
         const dy = transform.invertY(mouseY) - dData.dragStartY;
 
+        // 更新後のドラッグ開始位置を更新
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
 
-        // 選択中フィーチャの頂点を移動
         const st = stateManager.getState();
-        const { selectedFeature, selectedVertices } = st;
+        const { selectedFeature } = st;
         if (!selectedFeature || !selectedFeature.points) return;
 
-        // 自由移動候補の算出と排他チェック
-        // 各対象頂点について処理（対象が選択されていなければ、ドラッグ対象として1点とする）
-        let allSelected = selectedVertices.filter(v => v.featureId === selectedFeature.id);
-        if (allSelected.length === 0) {
-            allSelected = [{ featureId: selectedFeature.id, vertexIndex: dData.index }];
-        }
+        // 単純な移動候補（ポリゴン外ではカーソルと完全同期）
+        const simpleCandidate = {
+            x: selectedFeature.points[dData.index].x + dx,
+            y: selectedFeature.points[dData.index].y + dy
+        };
+        let candidate = simpleCandidate;
 
-        // ヘルパー関数：指定点と線分ABとの距離および射影点を算出
-        function pointToSegment(candidate, A, B) {
-            const ABx = B.x - A.x;
-            const ABy = B.y - A.y;
-            const len2 = ABx * ABx + ABy * ABy;
-            let t = 0;
-            if (len2 > 0) {
-                t = ((candidate.x - A.x) * ABx + (candidate.y - A.y) * ABy) / len2;
-                if (t < 0) t = 0;
-                if (t > 1) t = 1;
-            }
-            const proj = { x: A.x + t * ABx, y: A.y + t * ABy };
-            const dxSeg = candidate.x - proj.x;
-            const dySeg = candidate.y - proj.y;
-            const dist = Math.sqrt(dxSeg * dxSeg + dySeg * dySeg);
-            return { proj, dist };
-        }
-
-        // スナップ閾値（ズーム係数により調整）
+        // 現在のマウス座標
+        const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
         const SNAP_THRESHOLD = 10 / transform.k;
-        // 現在年の全ポリゴン（排他チェック用）
         const allPolygons = DataStore.getPolygons(st.currentYear);
 
-        for (const pos of allSelected) {
-            const i = pos.vertexIndex;
-            let pt = selectedFeature.points[i];
-            if (!pt) continue;
-
-            // 自由移動候補位置
-            let candidate = { x: pt.x + dx, y: pt.y + dy };
-
-            // 他のポリゴン（自分自身を除く）のエッジへの吸着処理
-            let snapCandidate = null;
-            let minDist = Infinity;
-            for (const poly of allPolygons) {
-                if (poly.id === selectedFeature.id) continue; // 自分自身は除外
-                if (!poly.points || poly.points.length < 2) continue;
-                const nPts = poly.points.length;
-                for (let j = 0; j < nPts; j++) {
-                    const A = poly.points[j];
-                    const B = poly.points[(j + 1) % nPts];
-                    const { proj, dist } = pointToSegment(candidate, A, B);
-                    if (dist < SNAP_THRESHOLD && dist < minDist) {
-                        minDist = dist;
-                        snapCandidate = proj;
-                    }
-                }
-            }
-            if (snapCandidate) {
-                candidate = snapCandidate;
-            }
-
-            // 次に、重複排他チェック：
-            // 仮に candidate を適用した場合の selectedFeature の頂点リストを作成
-            let tempPoints = selectedFeature.points.slice();
-            tempPoints[i] = { x: candidate.x, y: candidate.y };
-            let overlapDetected = false;
-            for (const poly of allPolygons) {
-                if (poly.id === selectedFeature.id) continue;
-                if (poly.layerId !== selectedFeature.layerId) continue;
-                if (poly.points && poly.points.length >= 3) {
-                    // polygonsOverlap は外周のみでチェックする想定
-                    // ※穴情報はここでは考慮しない
-                    // ※重複と判断された場合、overlapDetected を true にする
-                    // ※ここでは、単に重なりが発生するかどうかを調べる
-                    if (polygonsOverlap(tempPoints, poly.points)) {
-                        overlapDetected = true;
-                        break;
-                    }
-                }
-            }
-            // 適用候補が重複する場合は、候補を更新せず、前回有効な候補があればそれを使う
-            if (overlapDetected) {
-                if (dData.lastValidCandidates && dData.lastValidCandidates[i]) {
-                    candidate = dData.lastValidCandidates[i];
+        // 既にスナップ状態がある場合は、その対象ポリゴン内にマウスが留まっているか確認
+        if (dData.snapPolygonId) {
+            const snapPoly = allPolygons.find(p => p.id === dData.snapPolygonId);
+            if (snapPoly && pointInPolygon(mouseCoord, snapPoly.points)) {
+                // 既に記録済みのエッジ上で再計算して「滑る」ようにする
+                if (dData.snapEdgeA && dData.snapEdgeB) {
+                    const { proj } = (() => {
+                        const ABx = dData.snapEdgeB.x - dData.snapEdgeA.x;
+                        const ABy = dData.snapEdgeB.y - dData.snapEdgeA.y;
+                        const len2 = ABx * ABx + ABy * ABy;
+                        let t = 0;
+                        if (len2 > 0) {
+                            t = ((mouseCoord.x - dData.snapEdgeA.x) * ABx + (mouseCoord.y - dData.snapEdgeA.y) * ABy) / len2;
+                            if (t < 0) t = 0;
+                            if (t > 1) t = 1;
+                        }
+                        return { proj: { x: dData.snapEdgeA.x + t * ABx, y: dData.snapEdgeA.y + t * ABy } };
+                    })();
+                    candidate = proj;
+                    dData.snapCandidate = proj;
                 } else {
-                    // もし初回から重複するなら、何もしない（位置更新なし）
-                    candidate = pt; // そのまま
+                    // エッジ情報が無ければ再計算（下記の全体探索へ）
+                    dData.snapPolygonId = null;
+                    dData.snapCandidate = null;
+                    dData.snapEdgeA = null;
+                    dData.snapEdgeB = null;
+                    candidate = simpleCandidate;
                 }
             } else {
-                // 候補が有効なら更新して記録
-                dData.lastValidCandidates[i] = { x: candidate.x, y: candidate.y };
+                // マウスがスナップ対象ポリゴンから外れている場合は、スナップ状態をクリアして単純候補を採用
+                dData.snapPolygonId = null;
+                dData.snapCandidate = null;
+                dData.snapEdgeA = null;
+                dData.snapEdgeB = null;
+                candidate = simpleCandidate;
             }
-            // 最終的に該当頂点の位置を candidate に更新
-            pt.x = candidate.x;
-            pt.y = candidate.y;
         }
+        // スナップ状態が未設定の場合は、新たにスナップ候補を計算する
+        if (!dData.snapPolygonId) {
+            let bestSnapCandidate = null;
+            let bestSnapDistance = Infinity;
+            let bestPolyId = null;
+            let bestEdgeA = null;
+            let bestEdgeB = null;
+            for (const poly of allPolygons) {
+                if (poly.id === selectedFeature.id) continue;
+                if (!poly.points || poly.points.length < 2) continue;
+                // マウス座標が対象ポリゴン内にあるかどうかを確認
+                if (!pointInPolygon(mouseCoord, poly.points)) continue;
+                for (let j = 0; j < poly.points.length; j++) {
+                    const A = poly.points[j];
+                    const B = poly.points[(j + 1) % poly.points.length];
+                    const ABx = B.x - A.x;
+                    const ABy = B.y - A.y;
+                    const len2 = ABx * ABx + ABy * ABy;
+                    let t = 0;
+                    if (len2 > 0) {
+                        t = ((mouseCoord.x - A.x) * ABx + (mouseCoord.y - A.y) * ABy) / len2;
+                        if (t < 0) t = 0;
+                        if (t > 1) t = 1;
+                    }
+                    const proj = { x: A.x + t * ABx, y: A.y + t * ABy };
+                    const dxSeg = mouseCoord.x - proj.x;
+                    const dySeg = mouseCoord.y - proj.y;
+                    const dist = Math.sqrt(dxSeg * dxSeg + dySeg * dySeg);
+                    if (dist < SNAP_THRESHOLD && dist < bestSnapDistance) {
+                        bestSnapDistance = dist;
+                        bestSnapCandidate = proj;
+                        bestPolyId = poly.id;
+                        bestEdgeA = A;
+                        bestEdgeB = B;
+                    }
+                }
+            }
+            if (bestSnapCandidate) {
+                candidate = bestSnapCandidate;
+                dData.snapPolygonId = bestPolyId;
+                dData.snapCandidate = bestSnapCandidate;
+                dData.snapEdgeA = bestEdgeA;
+                dData.snapEdgeB = bestEdgeB;
+            }
+        }
+
+        // 重複排他チェック：仮に candidate を適用した場合の selectedFeature の頂点リストを作成
+        let tempPoints = selectedFeature.points.slice();
+        tempPoints[dData.index] = { x: candidate.x, y: candidate.y };
+        let overlapDetected = false;
+        for (const poly of allPolygons) {
+            if (poly.id === selectedFeature.id) continue;
+            if (poly.layerId !== selectedFeature.layerId) continue;
+            if (poly.points && poly.points.length >= 3) {
+                if (polygonsOverlap(tempPoints, poly.points)) {
+                    overlapDetected = true;
+                    break;
+                }
+            }
+        }
+        if (overlapDetected) {
+            if (dData.lastValidCandidates && dData.lastValidCandidates[dData.index]) {
+                candidate = dData.lastValidCandidates[dData.index];
+            } else {
+                candidate = selectedFeature.points[dData.index];
+            }
+        } else {
+            dData.lastValidCandidates[dData.index] = { x: candidate.x, y: candidate.y };
+        }
+        // 最終的に該当頂点の位置を candidate に更新
+        selectedFeature.points[dData.index].x = candidate.x;
+        selectedFeature.points[dData.index].y = candidate.y;
 
         // ---- 中間updateを行い、線や面をリアルタイム描画させる ----
         if (st.currentTool === 'lineVertexEdit') {
@@ -289,14 +305,12 @@ export function vertexDragEnded(event, dData, feature) {
 
         const st = stateManager.getState();
         if (!feature.points) {
-            // ドラッグ対象の頂点配列が無いなら何もしない
             renderDataCallback && renderDataCallback();
             return;
         }
 
-        // ドラッグ中に少なくとも1回移動した
+        // ドラッグ中に少なくとも1回移動した場合
         if (dData._dragged) {
-            // 最終的に store を update (shouldRecord=false) + UndoRedoManager記録
             if (st.currentTool === 'lineVertexEdit') {
                 DataStore.updateLine(feature, false);
                 const action = UndoRedoManager.makeAction(
@@ -360,6 +374,11 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
 
         tooltips.hideTooltip();
         dData._dragged = false;
+        // 初回ドラッグ時の設定：スナップ状態初期化
+        dData.snapPolygonId = null;
+        dData.snapCandidate = null;
+        dData.snapEdgeA = null;
+        dData.snapEdgeB = null;
 
         const transform = d3.zoomTransform(d3.select('#map svg').node());
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
@@ -412,11 +431,93 @@ export function edgeDragged(event, dData) {
         // 追加された新頂点を移動
         const pt = feature.points[dData.endIndex];
         if (pt) {
-            pt.x += dx;
-            pt.y += dy;
+            // 単純な移動候補
+            const simpleCandidate = { x: pt.x + dx, y: pt.y + dy };
+            let candidate = simpleCandidate;
+
+            // 新規頂点用のスナップ処理（同様にスナップ状態を保持）
+            const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
+            const SNAP_THRESHOLD = 10 / transform.k;
+            const allPolygons = DataStore.getPolygons(st.currentYear);
+
+            if (dData.snapPolygonId) {
+                const snapPoly = allPolygons.find(p => p.id === dData.snapPolygonId);
+                if (snapPoly && pointInPolygon(mouseCoord, snapPoly.points)) {
+                    if (dData.snapEdgeA && dData.snapEdgeB) {
+                        const ABx = dData.snapEdgeB.x - dData.snapEdgeA.x;
+                        const ABy = dData.snapEdgeB.y - dData.snapEdgeA.y;
+                        const len2 = ABx * ABx + ABy * ABy;
+                        let t = 0;
+                        if (len2 > 0) {
+                            t = ((mouseCoord.x - dData.snapEdgeA.x) * ABx + (mouseCoord.y - dData.snapEdgeA.y) * ABy) / len2;
+                            if (t < 0) t = 0;
+                            if (t > 1) t = 1;
+                        }
+                        const proj = { x: dData.snapEdgeA.x + t * ABx, y: dData.snapEdgeA.y + t * ABy };
+                        candidate = proj;
+                        dData.snapCandidate = proj;
+                    } else {
+                        dData.snapPolygonId = null;
+                        dData.snapCandidate = null;
+                        dData.snapEdgeA = null;
+                        dData.snapEdgeB = null;
+                        candidate = simpleCandidate;
+                    }
+                } else {
+                    dData.snapPolygonId = null;
+                    dData.snapCandidate = null;
+                    dData.snapEdgeA = null;
+                    dData.snapEdgeB = null;
+                    candidate = simpleCandidate;
+                }
+            }
+            if (!dData.snapPolygonId) {
+                let bestSnapCandidate = null;
+                let bestSnapDistance = Infinity;
+                let bestPolyId = null;
+                let bestEdgeA = null;
+                let bestEdgeB = null;
+                for (const poly of allPolygons) {
+                    if (poly.id === feature.id) continue;
+                    if (!poly.points || poly.points.length < 2) continue;
+                    if (!pointInPolygon(mouseCoord, poly.points)) continue;
+                    for (let j = 0; j < poly.points.length; j++) {
+                        const A = poly.points[j];
+                        const B = poly.points[(j + 1) % poly.points.length];
+                        const ABx = B.x - A.x;
+                        const ABy = B.y - A.y;
+                        const len2 = ABx * ABx + ABy * ABy;
+                        let t = 0;
+                        if (len2 > 0) {
+                            t = ((mouseCoord.x - A.x) * ABx + (mouseCoord.y - A.y) * ABy) / len2;
+                            if (t < 0) t = 0;
+                            if (t > 1) t = 1;
+                        }
+                        const proj = { x: A.x + t * ABx, y: A.y + t * ABy };
+                        const dxSeg = mouseCoord.x - proj.x;
+                        const dySeg = mouseCoord.y - proj.y;
+                        const dist = Math.sqrt(dxSeg * dxSeg + dySeg * dySeg);
+                        if (dist < SNAP_THRESHOLD && dist < bestSnapDistance) {
+                            bestSnapDistance = dist;
+                            bestSnapCandidate = proj;
+                            bestPolyId = poly.id;
+                            bestEdgeA = A;
+                            bestEdgeB = B;
+                        }
+                    }
+                }
+                if (bestSnapCandidate) {
+                    candidate = bestSnapCandidate;
+                    dData.snapPolygonId = bestPolyId;
+                    dData.snapCandidate = bestSnapCandidate;
+                    dData.snapEdgeA = bestEdgeA;
+                    dData.snapEdgeB = bestEdgeB;
+                }
+            }
+            pt.x = candidate.x;
+            pt.y = candidate.y;
         }
 
-        // 中間updateし、ライン/ポリゴンをリアルタイム追従
         if (st.currentTool === 'lineVertexEdit') {
             DataStore.updateLine(feature, false);
         } else if (st.currentTool === 'polygonVertexEdit') {
@@ -455,26 +556,24 @@ export function edgeDragEnded(event, dData, feature) {
             return;
         }
 
-        // 最終更新 & UndoRedo
-        if (st.currentTool === 'lineVertexEdit') {
-            DataStore.updateLine(feature, false);
-
-            const action = UndoRedoManager.makeAction(
-                'updateLine',
-                dragOriginalShape,
-                safeDeepCopy(feature)
-            );
-            UndoRedoManager.record(action);
-
-        } else if (st.currentTool === 'polygonVertexEdit') {
-            DataStore.updatePolygon(feature, false);
-
-            const action = UndoRedoManager.makeAction(
-                'updatePolygon',
-                dragOriginalShape,
-                safeDeepCopy(feature)
-            );
-            UndoRedoManager.record(action);
+        if (dData._dragged) {
+            if (st.currentTool === 'lineVertexEdit') {
+                DataStore.updateLine(feature, false);
+                const action = UndoRedoManager.makeAction(
+                    'updateLine',
+                    dragOriginalShape,
+                    safeDeepCopy(feature)
+                );
+                UndoRedoManager.record(action);
+            } else if (st.currentTool === 'polygonVertexEdit') {
+                DataStore.updatePolygon(feature, false);
+                const action = UndoRedoManager.makeAction(
+                    'updatePolygon',
+                    dragOriginalShape,
+                    safeDeepCopy(feature)
+                );
+                UndoRedoManager.record(action);
+            }
         }
 
         if (renderDataCallback) renderDataCallback();
