@@ -32,7 +32,7 @@ function getState() {
  * @param {Object} updates - 更新内容
  */
 function setState(updates) {
-    debugLog(4, 'setState() が呼び出されました。updates=', updates);
+    debugLog(4, `setState() が呼び出されました。updates= ${updates}`);
     try {
         // currentTool が変わったら selectedFeature をリセット
         if (updates.currentTool && updates.currentTool !== state.currentTool) {
