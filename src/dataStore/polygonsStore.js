@@ -1,13 +1,11 @@
 // src/dataStore/polygonsStore.js
-/****************************************************
- * 面情報のストア
- ****************************************************/
 
 import { getPropertiesForYear } from '../utils/index.js';
 import { debugLog } from '../utils/logger.js';
 import { showNotification } from '../ui/forms.js';
 import VerticesStore from './verticesStore.js';
 import stateManager from '../state/index.js';
+import { polygonsOverlap } from '../utils/geometryUtils.js';
 
 function generateVertexId() {
     return 'vx-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
@@ -18,55 +16,41 @@ const polygons = new Map();
 const PolygonsStore = {
 
     /**
-     * 指定年以下のプロパティを適用し、面情報を配列で返す
+     * 指定年に表示すべき面情報一覧を取得する。
+     * 面情報は外周と穴情報の座標を含む。
+     * ※ layerId はそのまま返す。
      * @param {number} year
      */
     getPolygons(year) {
         debugLog(4, `PolygonsStore.getPolygons() が呼び出されました。year=${year}`);
         try {
             return Array.from(polygons.values())
-                .map(poly => {
+                .map(pg => {
                     let props = null;
-                    if (poly.properties && Array.isArray(poly.properties)) {
-                        props = getPropertiesForYear(poly.properties, year);
+                    if (pg.properties && Array.isArray(pg.properties)) {
+                        props = getPropertiesForYear(pg.properties, year);
                     } else {
                         props = {
-                            year: poly.year || 0,
-                            name: poly.name || '不明な面情報',
-                            description: poly.description || '',
+                            year: pg.year || 0,
+                            name: pg.name || '不明な面情報',
+                            description: pg.description || '',
                         };
                     }
 
                     let coords = [];
-                    if (poly.vertexIds && Array.isArray(poly.vertexIds)) {
-                        coords = poly.vertexIds.map(vId => {
-                            const vx = VerticesStore.getById(vId);
-                            return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
-                        });
+                    if (pg.points && Array.isArray(pg.points)) {
+                        coords = pg.points;
                     }
-                    // holes 座標も同様に処理
+
                     let holesCoords = [];
-                    if (poly.holesVertexIds && Array.isArray(poly.holesVertexIds)) {
-                        holesCoords = poly.holesVertexIds.map(holeVIds => {
-                            if (Array.isArray(holeVIds)) {
-                                return holeVIds.map(vId => {
-                                    const vx = VerticesStore.getById(vId);
-                                    return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
-                                });
-                            }
-                            return []; // holeVIds が配列でない場合は空配列
-                        });
+                    if (pg.holes && Array.isArray(pg.holes)) {
+                        holesCoords = pg.holes;
                     }
 
-
-                    if (!props) return null;
                     return {
-                        id: poly.id,
-                        vertexIds: poly.vertexIds,
-                        holesVertexIds: poly.holesVertexIds, // ★ holes頂点IDリスト
-                        properties: poly.properties,
+                        ...pg,
                         points: coords,
-                        holes: holesCoords, // ★ holes座標リスト
+                        holes: holesCoords,
                         ...props
                     };
                 })
@@ -79,31 +63,19 @@ const PolygonsStore = {
     },
 
     /**
-     * 全面情報を返す (保存用) geometry含む
+     * 保存用に全面情報を、頂点座標情報付きで返す。
      */
     getAllPolygonsWithCoords() {
         debugLog(4, 'PolygonsStore.getAllPolygonsWithCoords() が呼び出されました。');
         try {
             return Array.from(polygons.values()).map(pg => {
                 let coords = [];
-                if (pg.vertexIds) {
-                    coords = pg.vertexIds.map(vId => {
-                        const vx = VerticesStore.getById(vId);
-                        return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
-                    });
+                if (pg.points && Array.isArray(pg.points)) {
+                    coords = pg.points;
                 }
-                // holes 座標も同様に処理
                 let holesCoords = [];
-                if (pg.holesVertexIds) {
-                    holesCoords = pg.holesVertexIds.map(holeVIds => {
-                        if (Array.isArray(holeVIds)) {
-                            return holeVIds.map(vId => {
-                                const vx = VerticesStore.getById(vId);
-                                return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
-                            });
-                        }
-                        return []; // holeVIds が配列でない場合は空配列
-                    });
+                if (pg.holes && Array.isArray(pg.holes)) {
+                    holesCoords = pg.holes;
                 }
                 return {
                     ...pg,
@@ -118,7 +90,9 @@ const PolygonsStore = {
     },
 
     /**
-     * 面情報を追加
+     * 面情報を追加する。
+     * レイヤーIDが未指定の場合は"default"を設定する。
+     * また、同一レイヤー内で既存の面情報と重なっていないかを geometryUtils.polygonsOverlap() によりチェックする。
      * @param {Object} poly
      */
     addPolygon(poly) {
@@ -128,8 +102,12 @@ const PolygonsStore = {
             if (!poly.id) {
                 poly.id = 'pg-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
             }
+            // レイヤーIDの設定：未指定なら"default"
+            if (!poly.layerId) {
+                poly.layerId = 'default';
+            }
 
-            // properties が無ければ currentYear を付与
+            // propertiesの初期設定
             if (!poly.properties || poly.properties.length === 0) {
                 poly.properties = [{
                     year: st.currentYear,
@@ -138,15 +116,19 @@ const PolygonsStore = {
                 }];
             }
 
+            // 外周の座標配列の初期化
+            if (!poly.points || !Array.isArray(poly.points)) {
+                poly.points = [];
+            }
+            // 穴情報の初期化
+            if (!poly.holes || !Array.isArray(poly.holes)) {
+                poly.holes = [];
+            }
+
+            const ptsArr = poly.points;
             if (!poly.vertexIds) {
                 poly.vertexIds = [];
             }
-            // holes 用 vertexIds
-            if (!poly.holesVertexIds) {
-                poly.holesVertexIds = [];
-            }
-
-            const ptsArr = (poly.points && Array.isArray(poly.points)) ? poly.points : [];
             while (poly.vertexIds.length < ptsArr.length) {
                 const newVid = generateVertexId();
                 poly.vertexIds.push(newVid);
@@ -161,14 +143,17 @@ const PolygonsStore = {
                 const vId = poly.vertexIds[i];
                 VerticesStore.updateVertex({ id: vId, x: coord.x || 0, y: coord.y || 0 });
             }
-
+            // 再生成された外周の座標
             poly.points = poly.vertexIds.map(vId => {
                 const vx = VerticesStore.getById(vId);
                 return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
             });
 
-            // holes 処理
+            // 穴情報の処理
             if (poly.holes && Array.isArray(poly.holes)) {
+                if (!poly.holesVertexIds) {
+                    poly.holesVertexIds = [];
+                }
                 poly.holesVertexIds = poly.holes.map(holePoints => {
                     if (Array.isArray(holePoints)) {
                         const holeVIds = [];
@@ -179,9 +164,8 @@ const PolygonsStore = {
                         });
                         return holeVIds;
                     }
-                    return []; // holePoints が配列でなければ空配列
+                    return [];
                 });
-                // holes 座標再生成
                 poly.holes = poly.holesVertexIds.map(holeVIds => {
                     return holeVIds.map(vId => {
                         const vx = VerticesStore.getById(vId);
@@ -193,6 +177,15 @@ const PolygonsStore = {
                 poly.holesVertexIds = [];
             }
 
+            // ***** 排他化チェック（同一レイヤー内の重なり判定） *****
+            for (let existing of polygons.values()) {
+                if (existing.layerId === poly.layerId) {
+                    if (polygonsOverlap(poly.points, existing.points)) {
+                        throw new Error('同じレイヤー内で面情報が重なっています。');
+                    }
+                }
+            }
+            // ***** 終了 *****
 
             polygons.set(poly.id, poly);
         } catch (error) {
@@ -202,7 +195,8 @@ const PolygonsStore = {
     },
 
     /**
-     * 面情報を更新
+     * 面情報を更新する。
+     * 更新後、同一レイヤー内で他の面情報と重なっていないかをチェックする。
      * @param {Object} updated
      */
     updatePolygon(updated) {
@@ -214,7 +208,7 @@ const PolygonsStore = {
                 return;
             }
 
-            // points (outer boundary)
+            // 外周の座標更新
             const ptsArr = (updated.points && Array.isArray(updated.points)) ? updated.points : existing.points || [];
             while (existing.vertexIds.length < ptsArr.length) {
                 const newVid = generateVertexId();
@@ -234,13 +228,15 @@ const PolygonsStore = {
                 return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
             });
 
-            // holes
+            // 穴情報の更新
             if (updated.holes && Array.isArray(updated.holes)) {
+                if (!existing.holesVertexIds) {
+                    existing.holesVertexIds = [];
+                }
                 existing.holesVertexIds = updated.holes.map((holePoints, holeIndex) => {
                     if (Array.isArray(holePoints)) {
                         let holeVIds = existing.holesVertexIds[holeIndex];
-                        if (!holeVIds) holeVIds = []; // holeVIds がまだない場合は初期化
-
+                        if (!holeVIds) holeVIds = [];
                         while (holeVIds.length < holePoints.length) {
                             const newVid = generateVertexId();
                             holeVIds.push(newVid);
@@ -256,9 +252,8 @@ const PolygonsStore = {
                         }
                         return holeVIds;
                     }
-                    return existing.holesVertexIds[holeIndex] || []; // holePoints が配列でなければ既存のIDを維持、なければ空配列
+                    return existing.holesVertexIds[holeIndex] || [];
                 });
-                // holes 座標再生成
                 existing.holes = existing.holesVertexIds.map(holeVIds => {
                     return holeVIds.map(vId => {
                         const vx = VerticesStore.getById(vId);
@@ -267,13 +262,28 @@ const PolygonsStore = {
                 });
             }
 
-
             if (updated.properties) {
                 existing.properties = updated.properties;
             }
             if (updated.name !== undefined) existing.name = updated.name;
             if (updated.description !== undefined) existing.description = updated.description;
             if (updated.year !== undefined) existing.year = updated.year;
+
+            // レイヤーIDの更新（更新時に変更があれば反映）
+            if (updated.layerId !== undefined) {
+                existing.layerId = updated.layerId;
+            }
+
+            // ***** 排他化チェック（更新後の形状が同一レイヤー内で重なっていないか） *****
+            for (let other of polygons.values()) {
+                if (other.id === existing.id) continue;
+                if (other.layerId === existing.layerId) {
+                    if (polygonsOverlap(existing.points, other.points)) {
+                        throw new Error('同じレイヤー内で面情報が重なっています。');
+                    }
+                }
+            }
+            // ***** 終了 *****
 
             polygons.set(existing.id, existing);
         } catch (error) {
@@ -282,6 +292,9 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * 指定IDの面情報を削除する。
+     */
     removePolygon(id) {
         debugLog(4, `PolygonsStore.removePolygon() が呼び出されました。id=${id}`);
         try {
@@ -292,6 +305,9 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * 指定IDの面情報を取得する。
+     */
     getById(id) {
         debugLog(4, `PolygonsStore.getById() が呼び出されました。id=${id}`);
         try {
@@ -302,6 +318,9 @@ const PolygonsStore = {
         }
     },
 
+    /**
+     * すべての面情報をクリアする。
+     */
     clear() {
         debugLog(3, 'PolygonsStore.clear() が呼び出されました。');
         polygons.clear();

@@ -9,6 +9,7 @@ import tooltips from '../../ui/tooltips.js';
 import { debugLog } from '../../utils/logger.js';
 import UndoRedoManager from '../../utils/undoRedoManager.js';
 import { getFeatureTooltipData } from './selection.js';
+import { polygonsOverlap } from '../../utils/geometryUtils.js';
 
 /**
  * ドラッグ前の形状を保持するための変数。
@@ -104,6 +105,8 @@ export function vertexDragStarted(event, dData, offsetX, feature) {
         tooltips.hideTooltip();
 
         dData._dragged = false;
+        // 初回ドラッグ時、各頂点の有効な候補位置を記録するためのオブジェクトを初期化
+        dData.lastValidCandidates = {};
 
         // ドラッグ開始位置を記録
         const transform = d3.zoomTransform(d3.select('#map svg').node());
@@ -149,15 +152,99 @@ export function vertexDragged(event, dData) {
         const { selectedFeature, selectedVertices } = st;
         if (!selectedFeature || !selectedFeature.points) return;
 
+        // 自由移動候補の算出と排他チェック
+        // 各対象頂点について処理（対象が選択されていなければ、ドラッグ対象として1点とする）
         let allSelected = selectedVertices.filter(v => v.featureId === selectedFeature.id);
         if (allSelected.length === 0) {
             allSelected = [{ featureId: selectedFeature.id, vertexIndex: dData.index }];
         }
+
+        // ヘルパー関数：指定点と線分ABとの距離および射影点を算出
+        function pointToSegment(candidate, A, B) {
+            const ABx = B.x - A.x;
+            const ABy = B.y - A.y;
+            const len2 = ABx * ABx + ABy * ABy;
+            let t = 0;
+            if (len2 > 0) {
+                t = ((candidate.x - A.x) * ABx + (candidate.y - A.y) * ABy) / len2;
+                if (t < 0) t = 0;
+                if (t > 1) t = 1;
+            }
+            const proj = { x: A.x + t * ABx, y: A.y + t * ABy };
+            const dxSeg = candidate.x - proj.x;
+            const dySeg = candidate.y - proj.y;
+            const dist = Math.sqrt(dxSeg * dxSeg + dySeg * dySeg);
+            return { proj, dist };
+        }
+
+        // スナップ閾値（ズーム係数により調整）
+        const SNAP_THRESHOLD = 10 / transform.k;
+        // 現在年の全ポリゴン（排他チェック用）
+        const allPolygons = DataStore.getPolygons(st.currentYear);
+
         for (const pos of allSelected) {
-            const pt = selectedFeature.points[pos.vertexIndex];
+            const i = pos.vertexIndex;
+            let pt = selectedFeature.points[i];
             if (!pt) continue;
-            pt.x += dx;
-            pt.y += dy;
+
+            // 自由移動候補位置
+            let candidate = { x: pt.x + dx, y: pt.y + dy };
+
+            // 他のポリゴン（自分自身を除く）のエッジへの吸着処理
+            let snapCandidate = null;
+            let minDist = Infinity;
+            for (const poly of allPolygons) {
+                if (poly.id === selectedFeature.id) continue; // 自分自身は除外
+                if (!poly.points || poly.points.length < 2) continue;
+                const nPts = poly.points.length;
+                for (let j = 0; j < nPts; j++) {
+                    const A = poly.points[j];
+                    const B = poly.points[(j + 1) % nPts];
+                    const { proj, dist } = pointToSegment(candidate, A, B);
+                    if (dist < SNAP_THRESHOLD && dist < minDist) {
+                        minDist = dist;
+                        snapCandidate = proj;
+                    }
+                }
+            }
+            if (snapCandidate) {
+                candidate = snapCandidate;
+            }
+
+            // 次に、重複排他チェック：
+            // 仮に candidate を適用した場合の selectedFeature の頂点リストを作成
+            let tempPoints = selectedFeature.points.slice();
+            tempPoints[i] = { x: candidate.x, y: candidate.y };
+            let overlapDetected = false;
+            for (const poly of allPolygons) {
+                if (poly.id === selectedFeature.id) continue;
+                if (poly.layerId !== selectedFeature.layerId) continue;
+                if (poly.points && poly.points.length >= 3) {
+                    // polygonsOverlap は外周のみでチェックする想定
+                    // ※穴情報はここでは考慮しない
+                    // ※重複と判断された場合、overlapDetected を true にする
+                    // ※ここでは、単に重なりが発生するかどうかを調べる
+                    if (polygonsOverlap(tempPoints, poly.points)) {
+                        overlapDetected = true;
+                        break;
+                    }
+                }
+            }
+            // 適用候補が重複する場合は、候補を更新せず、前回有効な候補があればそれを使う
+            if (overlapDetected) {
+                if (dData.lastValidCandidates && dData.lastValidCandidates[i]) {
+                    candidate = dData.lastValidCandidates[i];
+                } else {
+                    // もし初回から重複するなら、何もしない（位置更新なし）
+                    candidate = pt; // そのまま
+                }
+            } else {
+                // 候補が有効なら更新して記録
+                dData.lastValidCandidates[i] = { x: candidate.x, y: candidate.y };
+            }
+            // 最終的に該当頂点の位置を candidate に更新
+            pt.x = candidate.x;
+            pt.y = candidate.y;
         }
 
         // ---- 中間updateを行い、線や面をリアルタイム描画させる ----
