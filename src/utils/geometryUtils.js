@@ -94,3 +94,27 @@ export function pointInPolygon(point, polygon) {
     }
     return inside;
 }
+
+/****************************************************
+ * [新規追加]
+ * 点と線分間の最小距離を計算する関数。
+ * @param {Object} point - {x, y}のオブジェクト
+ * @param {Object} A - 線分始点 {x, y}
+ * @param {Object} B - 線分終点 {x, y}
+ * @returns {number} - pointから線分ABまでの最小距離
+ ****************************************************/
+export function distancePointToSegment(point, A, B) {
+    const ABx = B.x - A.x;
+    const ABy = B.y - A.y;
+    const len2 = ABx * ABx + ABy * ABy;
+    let t = 0;
+    if (len2 > 0) {
+        t = ((point.x - A.x) * ABx + (point.y - A.y) * ABy) / len2;
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
+    }
+    const proj = { x: A.x + t * ABx, y: A.y + t * ABy };
+    const dx = point.x - proj.x;
+    const dy = point.y - proj.y;
+    return Math.sqrt(dx * dx + dy * dy);
+}

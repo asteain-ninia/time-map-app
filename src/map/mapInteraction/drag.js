@@ -9,7 +9,7 @@ import tooltips from '../../ui/tooltips.js';
 import { debugLog } from '../../utils/logger.js';
 import UndoRedoManager from '../../utils/undoRedoManager.js';
 import { getFeatureTooltipData } from './selection.js';
-import { polygonsOverlap, pointInPolygon } from '../../utils/geometryUtils.js';
+import { polygonsOverlap, pointInPolygon, distancePointToSegment } from '../../utils/geometryUtils.js';
 
 let dragOriginalShape = null; // ドラッグ前の形状を保持するための変数
 let isDraggingFeature = false; // ドラッグ中かどうかのフラグ
@@ -22,6 +22,12 @@ let enableMapZoomCallback = null;
 
 // 再描画コールバック (renderData)
 let renderDataCallback = null;
+
+/**
+ * ドラッグ中にスナップ対象となっているエッジ情報を保持するための変数
+ * { snapEdgeA, snapEdgeB } の形で保持し、ドラッグ終了時にクリアする
+ */
+export let currentSnapEdge = null;
 
 /**
  * originalLine / originalPolygon / originalPoint などを除外して
@@ -45,8 +51,12 @@ function throttledRenderDuringDrag() {
         if (!dragRenderTimeout) {
             dragRenderTimeout = setTimeout(() => {
                 debugLog(4, 'throttledRenderDuringDrag - 再描画実行');
-                renderDataCallback();
-                dragRenderTimeout = null;
+                try {
+                    renderDataCallback();
+                    dragRenderTimeout = null;
+                } catch (error) {
+                    debugLog(1, `throttledRenderDuringDrag() 内でエラー発生: ${error}`);
+                }
             }, DRAG_RENDER_DELAY);
         }
     } catch (error) {
@@ -236,6 +246,36 @@ export function vertexDragged(event, dData) {
             }
         }
 
+        // 現在のスナップエッジ情報をグローバル変数に反映（ハイライト描画用）
+        currentSnapEdge = (dData.snapEdgeA && dData.snapEdgeB) ? { snapEdgeA: dData.snapEdgeA, snapEdgeB: dData.snapEdgeB } : null;
+
+        // 既存面内に頂点を配置できないチェック
+        let insideConflict = false;
+        for (const poly of allPolygons) {
+            if (poly.layerId !== selectedFeature.layerId) continue;
+            if (pointInPolygon(candidate, poly.points)) {
+                let minDist = Infinity;
+                for (let j = 0; j < poly.points.length; j++) {
+                    const A = poly.points[j];
+                    const B = poly.points[(j + 1) % poly.points.length];
+                    const d = distancePointToSegment(candidate, A, B);
+                    if (d < minDist) minDist = d;
+                }
+                const threshold = 5 / transform.k;
+                if (minDist > threshold) {
+                    insideConflict = true;
+                    break;
+                }
+            }
+        }
+        if (insideConflict) {
+            if (dData.lastValidCandidates && dData.lastValidCandidates[dData.index]) {
+                candidate = dData.lastValidCandidates[dData.index];
+            } else {
+                candidate = selectedFeature.points[dData.index];
+            }
+        }
+
         // 重複排他チェック：仮に candidate を適用した場合の selectedFeature の頂点リストを作成
         let tempPoints = selectedFeature.points.slice();
         tempPoints[dData.index] = { x: candidate.x, y: candidate.y };
@@ -259,6 +299,7 @@ export function vertexDragged(event, dData) {
         } else {
             dData.lastValidCandidates[dData.index] = { x: candidate.x, y: candidate.y };
         }
+
         // 最終的に該当頂点の位置を candidate に更新
         selectedFeature.points[dData.index].x = candidate.x;
         selectedFeature.points[dData.index].y = candidate.y;
@@ -296,6 +337,9 @@ export function vertexDragEnded(event, dData, feature) {
 
         if (!isDraggingFeature) return;
         isDraggingFeature = false;
+
+        // ドラッグ終了時はスナップエッジ情報をクリア
+        currentSnapEdge = null;
 
         if (event.sourceEvent) {
             const tooltipData = getFeatureTooltipData(feature);
@@ -514,6 +558,38 @@ export function edgeDragged(event, dData) {
                     dData.snapEdgeB = bestEdgeB;
                 }
             }
+
+            // [新規追加] 現在のスナップエッジ情報をグローバル変数に反映
+            currentSnapEdge = (dData.snapEdgeA && dData.snapEdgeB) ? { snapEdgeA: dData.snapEdgeA, snapEdgeB: dData.snapEdgeB } : null;
+
+            // [新規追加] 既存面内に頂点を配置できないチェック
+            let insideConflict = false;
+            for (const poly of allPolygons) {
+                if (poly.layerId !== feature.layerId) continue;
+                if (pointInPolygon(candidate, poly.points)) {
+                    let minDist = Infinity;
+                    for (let j = 0; j < poly.points.length; j++) {
+                        const A = poly.points[j];
+                        const B = poly.points[(j + 1) % poly.points.length];
+                        const d = distancePointToSegment(candidate, A, B);
+                        if (d < minDist) minDist = d;
+                    }
+                    const threshold = 5 / transform.k;
+                    if (minDist > threshold) {
+                        insideConflict = true;
+                        break;
+                    }
+                }
+            }
+            if (insideConflict) {
+                // キープしていた最後の有効候補に戻す
+                if (dData.lastValidCandidates && dData.lastValidCandidates[dData.endIndex]) {
+                    candidate = dData.lastValidCandidates[dData.endIndex];
+                } else {
+                    candidate = pt;
+                }
+            }
+
             pt.x = candidate.x;
             pt.y = candidate.y;
         }
@@ -543,6 +619,9 @@ export function edgeDragEnded(event, dData, feature) {
 
         if (!isDraggingFeature) return;
         isDraggingFeature = false;
+
+        // ドラッグ終了時はスナップエッジ情報をクリア
+        currentSnapEdge = null;
 
         if (event.sourceEvent) {
             const tooltipData = getFeatureTooltipData(feature);
@@ -582,12 +661,10 @@ export function edgeDragEnded(event, dData, feature) {
             clearTimeout(dragRenderTimeout);
             dragRenderTimeout = null;
         }
-
         delete dData.dragStartX;
         delete dData.dragStartY;
         delete dData._dragged;
         dragOriginalShape = null;
-
     } catch (error) {
         debugLog(1, `edgeDragEnded() でエラー発生: ${error}`);
     }

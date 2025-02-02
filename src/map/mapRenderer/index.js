@@ -15,6 +15,7 @@ import {
 import { debugLog } from '../../utils/logger.js';
 import { drawFeatures } from './drawFeatures.js';
 import { drawVertexHandles, drawEdgeHandles } from './drawHandles.js';
+import { currentSnapEdge } from '../../map/mapInteraction/drag.js';
 
 let zoom;
 let svg;
@@ -38,6 +39,8 @@ export const colorScheme = {
     tempPolygonStroke: 'orange',
     tempPolygonFill: 'rgba(255,165,0,0.3)',
     tempPointFill: 'orange',
+    // 新規：スナップエッジハイライト用
+    snapEdgeHighlight: 'red'
 };
 
 /**
@@ -285,6 +288,25 @@ export function renderData() {
                 drawVertexHandles(dataGroup, selectedFeature);
                 drawEdgeHandles(dataGroup, selectedFeature);
             }
+        }
+
+        // スナップ中の境界ハイライトの描画
+        if (currentSnapEdge && currentSnapEdge.snapEdgeA && currentSnapEdge.snapEdgeB) {
+            const snapGroup = zoomGroup.append('g').attr('class', 'snap-edge-highlight');
+            mapCopies.forEach((offset) => {
+                const offsetX = offset * mapWidth;
+                const adjustedA = { x: currentSnapEdge.snapEdgeA.x + offsetX, y: currentSnapEdge.snapEdgeA.y };
+                const adjustedB = { x: currentSnapEdge.snapEdgeB.x + offsetX, y: currentSnapEdge.snapEdgeB.y };
+                snapGroup.append('line')
+                    .attr('x1', adjustedA.x)
+                    .attr('y1', adjustedA.y)
+                    .attr('x2', adjustedB.x)
+                    .attr('y2', adjustedB.y)
+                    .attr('stroke', colorScheme.snapEdgeHighlight)
+                    .attr('stroke-width', 4)
+                    .attr('stroke-dasharray', '5,5')
+                    .style('vector-effect', 'non-scaling-stroke');
+            });
         }
     } catch (error) {
         debugLog(1, `renderData() でエラー発生: ${error}`);
