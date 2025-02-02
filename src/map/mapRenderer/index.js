@@ -181,6 +181,8 @@ export function renderData() {
 
         zoomGroup.selectAll('.data-group').remove();
         zoomGroup.selectAll('.temp-feature-group').remove();
+        // 追加：既存のスナップエッジハイライトを削除する
+        zoomGroup.selectAll('.snap-edge-highlight').remove();
 
         const dataGroup = zoomGroup.append('g').attr('class', 'data-group');
 
