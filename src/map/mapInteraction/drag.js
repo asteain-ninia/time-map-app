@@ -9,7 +9,38 @@ import tooltips from '../../ui/tooltips.js';
 import { debugLog } from '../../utils/logger.js';
 import UndoRedoManager from '../../utils/undoRedoManager.js';
 import { getFeatureTooltipData } from './selection.js';
-import { polygonsOverlap, pointInPolygon, distancePointToSegment } from '../../utils/geometryUtils.js';
+import { polygonsOverlap, pointInPolygon, distancePointToSegment, doLineSegmentsIntersect } from '../../utils/geometryUtils.js';
+
+// 自己交差および重なり判定用ヘルパー 
+function isSelfIntersecting(polygon) {
+    const n = polygon.length;
+    for (let i = 0; i < n; i++) {
+        const a1 = polygon[i];
+        const a2 = polygon[(i + 1) % n];
+        for (let j = i + 2; j < n; j++) {
+            // 隣接エッジ（および最初と最後のエッジ）はスキップ
+            if (i === 0 && j === n - 1) continue;
+            const b1 = polygon[j];
+            const b2 = polygon[(j + 1) % n];
+            if (doLineSegmentsIntersect(a1, a2, b1, b2)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function causesOverlap(candidatePolygon, selectedFeatureId, currentLayer) {
+    const allPolygons = DataStore.getPolygons(stateManager.getState().currentYear);
+    for (const poly of allPolygons) {
+        if (poly.id === selectedFeatureId) continue;
+        if (poly.layerId !== currentLayer) continue;
+        if (polygonsOverlap(candidatePolygon, poly.points)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 let dragOriginalShape = null; // ドラッグ前の形状を保持するための変数
 let isDraggingFeature = false; // ドラッグ中かどうかのフラグ
@@ -160,7 +191,9 @@ export function vertexDragged(event, dData) {
 
         // 現在のマウス座標
         const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
-        const SNAP_THRESHOLD = 10 / transform.k;
+
+        // スナップ処理
+        const SNAP_THRESHOLD = 15 / transform.k;
         const allPolygons = DataStore.getPolygons(st.currentYear);
 
         // 既にスナップ状態がある場合は、その対象ポリゴン内にマウスが留まっているか確認
@@ -249,48 +282,19 @@ export function vertexDragged(event, dData) {
         // 現在のスナップエッジ情報をグローバル変数に反映（ハイライト描画用）
         currentSnapEdge = (dData.snapEdgeA && dData.snapEdgeB) ? { snapEdgeA: dData.snapEdgeA, snapEdgeB: dData.snapEdgeB } : null;
 
-        // 既存面内に頂点を配置できないチェック
-        let insideConflict = false;
-        for (const poly of allPolygons) {
-            if (poly.layerId !== selectedFeature.layerId) continue;
-            if (pointInPolygon(candidate, poly.points)) {
-                let minDist = Infinity;
-                for (let j = 0; j < poly.points.length; j++) {
-                    const A = poly.points[j];
-                    const B = poly.points[(j + 1) % poly.points.length];
-                    const d = distancePointToSegment(candidate, A, B);
-                    if (d < minDist) minDist = d;
-                }
-                const threshold = 5 / transform.k;
-                if (minDist > threshold) {
-                    insideConflict = true;
-                    break;
-                }
-            }
-        }
-        if (insideConflict) {
+        // 既存面内に頂点を配置できないチェック＋
+        // 候補で更新した場合の自己交差・重なり判定
+        const candidatePolygon = selectedFeature.points.slice();
+        candidatePolygon[dData.index] = { x: candidate.x, y: candidate.y };
+        if (isSelfIntersecting(candidatePolygon)) {
+            debugLog(3, '候補の頂点移動により自己交差が発生するため、前の有効候補に戻します。');
             if (dData.lastValidCandidates && dData.lastValidCandidates[dData.index]) {
                 candidate = dData.lastValidCandidates[dData.index];
             } else {
                 candidate = selectedFeature.points[dData.index];
             }
-        }
-
-        // 重複排他チェック：仮に candidate を適用した場合の selectedFeature の頂点リストを作成
-        let tempPoints = selectedFeature.points.slice();
-        tempPoints[dData.index] = { x: candidate.x, y: candidate.y };
-        let overlapDetected = false;
-        for (const poly of allPolygons) {
-            if (poly.id === selectedFeature.id) continue;
-            if (poly.layerId !== selectedFeature.layerId) continue;
-            if (poly.points && poly.points.length >= 3) {
-                if (polygonsOverlap(tempPoints, poly.points)) {
-                    overlapDetected = true;
-                    break;
-                }
-            }
-        }
-        if (overlapDetected) {
+        } else if (causesOverlap(candidatePolygon, selectedFeature.id, selectedFeature.layerId)) {
+            debugLog(3, '候補の頂点移動により同一レイヤー内で面情報が重なってしまうため、前の有効候補に戻します。');
             if (dData.lastValidCandidates && dData.lastValidCandidates[dData.index]) {
                 candidate = dData.lastValidCandidates[dData.index];
             } else {
@@ -481,7 +485,7 @@ export function edgeDragged(event, dData) {
 
             // 新規頂点用のスナップ処理（同様にスナップ状態を保持）
             const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
-            const SNAP_THRESHOLD = 10 / transform.k;
+            const SNAP_THRESHOLD = 15 / transform.k;
             const allPolygons = DataStore.getPolygons(st.currentYear);
 
             if (dData.snapPolygonId) {
@@ -559,35 +563,28 @@ export function edgeDragged(event, dData) {
                 }
             }
 
-            // [新規追加] 現在のスナップエッジ情報をグローバル変数に反映
+            // 現在のスナップエッジ情報をグローバル変数に反映
             currentSnapEdge = (dData.snapEdgeA && dData.snapEdgeB) ? { snapEdgeA: dData.snapEdgeA, snapEdgeB: dData.snapEdgeB } : null;
 
-            // [新規追加] 既存面内に頂点を配置できないチェック
-            let insideConflict = false;
-            for (const poly of allPolygons) {
-                if (poly.layerId !== feature.layerId) continue;
-                if (pointInPolygon(candidate, poly.points)) {
-                    let minDist = Infinity;
-                    for (let j = 0; j < poly.points.length; j++) {
-                        const A = poly.points[j];
-                        const B = poly.points[(j + 1) % poly.points.length];
-                        const d = distancePointToSegment(candidate, A, B);
-                        if (d < minDist) minDist = d;
-                    }
-                    const threshold = 5 / transform.k;
-                    if (minDist > threshold) {
-                        insideConflict = true;
-                        break;
-                    }
-                }
-            }
-            if (insideConflict) {
-                // キープしていた最後の有効候補に戻す
+            // 候補で更新した場合の自己交差・重なり判定
+            const candidatePolygon = feature.points.slice();
+            candidatePolygon[dData.endIndex] = { x: candidate.x, y: candidate.y };
+            if (isSelfIntersecting(candidatePolygon)) {
+                debugLog(3, 'エッジドラッグ候補で自己交差が発生するため、前の有効候補に戻します。');
                 if (dData.lastValidCandidates && dData.lastValidCandidates[dData.endIndex]) {
                     candidate = dData.lastValidCandidates[dData.endIndex];
                 } else {
                     candidate = pt;
                 }
+            } else if (causesOverlap(candidatePolygon, feature.id, feature.layerId)) {
+                debugLog(3, 'エッジドラッグ候補で同一レイヤー内の面情報と重なってしまうため、前の有効候補に戻します。');
+                if (dData.lastValidCandidates && dData.lastValidCandidates[dData.endIndex]) {
+                    candidate = dData.lastValidCandidates[dData.endIndex];
+                } else {
+                    candidate = pt;
+                }
+            } else {
+                dData.lastValidCandidates[dData.endIndex] = { x: candidate.x, y: candidate.y };
             }
 
             pt.x = candidate.x;
