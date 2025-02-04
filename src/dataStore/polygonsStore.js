@@ -7,10 +7,6 @@ import VerticesStore from './verticesStore.js';
 import stateManager from '../state/index.js';
 import { polygonsOverlap } from '../utils/geometryUtils.js';
 
-function generateVertexId() {
-    return 'vx-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
-}
-
 const polygons = new Map();
 
 const PolygonsStore = {
@@ -20,6 +16,7 @@ const PolygonsStore = {
      * 面情報は外周と穴情報の座標を含む。
      * ※ layerId はそのまま返す。
      * @param {number} year
+     * @returns {Array} 面情報オブジェクトの配列
      */
     getPolygons(year) {
         debugLog(4, `PolygonsStore.getPolygons() が呼び出されました。year=${year}`);
@@ -92,8 +89,9 @@ const PolygonsStore = {
     /**
      * 面情報を追加する。
      * レイヤーIDが未指定の場合は"default"を設定する。
-     * また、同一レイヤー内で既存の面情報と重なっていないかを geometryUtils.polygonsOverlap() によりチェックする。
-     * @param {Object} poly
+     * また、同一レイヤー内で既存の面情報と重なっていないかを
+     * polygonsOverlap() によりチェックする。
+     * @param {Object} poly - 面情報オブジェクト。外周は poly.points、穴は poly.holes（配列）で指定。
      */
     addPolygon(poly) {
         debugLog(4, `PolygonsStore.addPolygon() が呼び出されました。polygon.id=${poly?.id}`);
@@ -129,10 +127,10 @@ const PolygonsStore = {
             if (!poly.vertexIds) {
                 poly.vertexIds = [];
             }
+            // 外周頂点の生成・更新（共有頂点ロジックを使用）
             while (poly.vertexIds.length < ptsArr.length) {
-                const newVid = generateVertexId();
+                const newVid = VerticesStore.createOrGetVertex(ptsArr[poly.vertexIds.length]);
                 poly.vertexIds.push(newVid);
-                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
             }
             while (poly.vertexIds.length > ptsArr.length) {
                 poly.vertexIds.pop();
@@ -149,7 +147,7 @@ const PolygonsStore = {
                 return vx ? { x: vx.x, y: vx.y } : { x: 0, y: 0 };
             });
 
-            // 穴情報の処理
+            // 穴情報の処理（各穴も共有頂点ロジックを使用）
             if (poly.holes && Array.isArray(poly.holes)) {
                 if (!poly.holesVertexIds) {
                     poly.holesVertexIds = [];
@@ -158,8 +156,9 @@ const PolygonsStore = {
                     if (Array.isArray(holePoints)) {
                         const holeVIds = [];
                         holePoints.forEach(p => {
-                            const newVid = generateVertexId();
+                            const newVid = VerticesStore.createOrGetVertex(p);
                             holeVIds.push(newVid);
+                            // 初期登録のため addVertex を呼び出す
                             VerticesStore.addVertex({ id: newVid, x: p.x || 0, y: p.y || 0 });
                         });
                         return holeVIds;
@@ -197,7 +196,7 @@ const PolygonsStore = {
     /**
      * 面情報を更新する。
      * 更新後、同一レイヤー内で他の面情報と重なっていないかをチェックする。
-     * @param {Object} updated
+     * @param {Object} updated - 更新後の面情報オブジェクト
      */
     updatePolygon(updated) {
         debugLog(4, `PolygonsStore.updatePolygon() が呼び出されました。updatedPolygon.id=${updated?.id}`);
@@ -207,13 +206,11 @@ const PolygonsStore = {
                 debugLog(3, `PolygonsStore.updatePolygon() - 更新対象が見つかりません。ID: ${updated?.id}`);
                 return;
             }
-
-            // 外周の座標更新
+            // 外周の座標更新（共有頂点ロジックを使用）
             const ptsArr = (updated.points && Array.isArray(updated.points)) ? updated.points : existing.points || [];
             while (existing.vertexIds.length < ptsArr.length) {
-                const newVid = generateVertexId();
+                const newVid = VerticesStore.createOrGetVertex(ptsArr[existing.vertexIds.length]);
                 existing.vertexIds.push(newVid);
-                VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
             }
             while (existing.vertexIds.length > ptsArr.length) {
                 existing.vertexIds.pop();
@@ -238,7 +235,7 @@ const PolygonsStore = {
                         let holeVIds = existing.holesVertexIds[holeIndex];
                         if (!holeVIds) holeVIds = [];
                         while (holeVIds.length < holePoints.length) {
-                            const newVid = generateVertexId();
+                            const newVid = VerticesStore.createOrGetVertex(holePoints[holeVIds.length]);
                             holeVIds.push(newVid);
                             VerticesStore.addVertex({ id: newVid, x: 0, y: 0 });
                         }
@@ -294,6 +291,7 @@ const PolygonsStore = {
 
     /**
      * 指定IDの面情報を削除する。
+     * @param {string|number} id
      */
     removePolygon(id) {
         debugLog(4, `PolygonsStore.removePolygon() が呼び出されました。id=${id}`);
@@ -307,6 +305,8 @@ const PolygonsStore = {
 
     /**
      * 指定IDの面情報を取得する。
+     * @param {string|number} id
+     * @returns {Object|null}
      */
     getById(id) {
         debugLog(4, `PolygonsStore.getById() が呼び出されました。id=${id}`);

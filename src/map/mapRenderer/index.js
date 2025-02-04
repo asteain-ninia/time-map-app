@@ -39,8 +39,8 @@ export const colorScheme = {
     tempPolygonStroke: 'orange',
     tempPolygonFill: 'rgba(255,165,0,0.3)',
     tempPointFill: 'orange',
-    // 新規：スナップエッジハイライト用
-    snapEdgeHighlight: 'red'
+    snapEdgeHighlight: 'red',
+    sharedVertex: 'deepskyblue'
 };
 
 /**
