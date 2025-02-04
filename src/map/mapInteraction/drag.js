@@ -11,7 +11,7 @@ import UndoRedoManager from '../../utils/undoRedoManager.js';
 import { getFeatureTooltipData } from './selection.js';
 import { polygonsOverlap, pointInPolygon, distancePointToSegment, doLineSegmentsIntersect } from '../../utils/geometryUtils.js';
 
-// 自己交差および重なり判定用ヘルパー 
+// ===== 追加：自己交差および重なり判定用ヘルパー =====
 function isSelfIntersecting(polygon) {
     const n = polygon.length;
     for (let i = 0; i < n; i++) {
@@ -41,6 +41,7 @@ function causesOverlap(candidatePolygon, selectedFeatureId, currentLayer) {
     }
     return false;
 }
+// ===== ここまで追加 =====
 
 let dragOriginalShape = null; // ドラッグ前の形状を保持するための変数
 let isDraggingFeature = false; // ドラッグ中かどうかのフラグ
@@ -421,6 +422,8 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
         if (disableMapZoomCallback) disableMapZoomCallback();
 
         tooltips.hideTooltip();
+        // ← ここで新規頂点用の候補記録用オブジェクトを初期化（vertexDragStarted では行っている）
+        dData.lastValidCandidates = {};
         dData._dragged = false;
         // 初回ドラッグ時の設定：スナップ状態初期化
         dData.snapPolygonId = null;
