@@ -192,7 +192,9 @@ export function vertexDragged(event, dData) {
         let candidate = simpleCandidate;
 
         // 現在のマウス座標
-        const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
+        // const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
+        // offsetXを考慮
+        const mouseCoord = { x: transform.invertX(mouseX) - dData.offsetX, y: transform.invertY(mouseY) };
 
         // スナップ処理
         const SNAP_THRESHOLD = 15 / transform.k;
@@ -307,8 +309,24 @@ export function vertexDragged(event, dData) {
         }
 
         // 最終的に該当頂点の位置を candidate に更新
-        selectedFeature.points[dData.index].x = candidate.x;
-        selectedFeature.points[dData.index].y = candidate.y;
+        // selectedFeature.points[dData.index].x = candidate.x;
+        // selectedFeature.points[dData.index].y = candidate.y;
+
+        // 代わりに、createOrGetVertexを呼んで、実際に近い頂点があればそちらを使う
+        const { x, y } = candidate;
+        // 除外対象
+        const excludeIds = selectedFeature.vertexIds.filter(
+            (id, index) => index !== dData.index
+        );
+
+        const newVertexId = VerticesStore.createOrGetVertex({ x, y }, excludeIds);
+
+        // 既存の頂点IDから置き換える
+        selectedFeature.vertexIds[dData.index] = newVertexId;
+        // 座標も更新
+        const newVertex = VerticesStore.getById(newVertexId);
+        selectedFeature.points[dData.index].x = newVertex.x;
+        selectedFeature.points[dData.index].y = newVertex.y;
 
         // ---- 中間updateを行い、線や面をリアルタイム描画させる ----
         if (st.currentTool === 'lineVertexEdit') {
@@ -363,17 +381,25 @@ export function vertexDragEnded(event, dData, feature) {
         if (dData._dragged) {
             if (st.currentTool === 'lineVertexEdit') {
                 // DataStore 側の points, vertexIds を更新
-                feature.points.forEach((p, i) => {
-                    const vertexId = feature.vertexIds[i];
-                    if (vertexId) {
-                        const vertex = VerticesStore.getById(vertexId);
-                        if (vertex) {
-                            vertex.x = p.x;
-                            vertex.y = p.y;
-                            VerticesStore.updateVertex(vertex);
-                        }
-                    }
-                });
+                // feature.points.forEach((p, i) => {
+                //     const vertexId = feature.vertexIds[i];
+                //     if (vertexId) {
+                //         const vertex = VerticesStore.getById(vertexId);
+                //         if (vertex) {
+                //             vertex.x = p.x;
+                //             vertex.y = p.y;
+                //             VerticesStore.updateVertex(vertex);
+                //         }
+                //     }
+                // });
+                // 代わりに
+                const vertex = VerticesStore.getById(feature.vertexIds[dData.index]);
+                if (vertex) {
+                    vertex.x = feature.points[dData.index].x;
+                    vertex.y = feature.points[dData.index].y;
+                    VerticesStore.updateVertex(vertex);
+                }
+
                 DataStore.updateLine(feature, false);
                 const action = UndoRedoManager.makeAction(
                     'updateLine',
@@ -384,17 +410,24 @@ export function vertexDragEnded(event, dData, feature) {
 
             } else if (st.currentTool === 'polygonVertexEdit') {
                 // DataStore 側の points, vertexIds を更新
-                feature.points.forEach((p, i) => {
-                    const vertexId = feature.vertexIds[i];
-                    if (vertexId) {
-                        const vertex = VerticesStore.getById(vertexId);
-                        if (vertex) {
-                            vertex.x = p.x;
-                            vertex.y = p.y;
-                            VerticesStore.updateVertex(vertex);
-                        }
-                    }
-                });
+                // feature.points.forEach((p, i) => {
+                //     const vertexId = feature.vertexIds[i];
+                //         if(vertexId){
+                //         const vertex = VerticesStore.getById(vertexId);
+                //         if (vertex) {
+                //             vertex.x = p.x;
+                //             vertex.y = p.y;
+                //             VerticesStore.updateVertex(vertex);
+                //         }
+                //     }
+                // });
+                // 代わりに
+                const vertex = VerticesStore.getById(feature.vertexIds[dData.index]);
+                if (vertex) {
+                    vertex.x = feature.points[dData.index].x;
+                    vertex.y = feature.points[dData.index].y;
+                    VerticesStore.updateVertex(vertex);
+                }
                 DataStore.updatePolygon(feature, false);
                 const action = UndoRedoManager.makeAction(
                     'updatePolygon',
@@ -406,17 +439,25 @@ export function vertexDragEnded(event, dData, feature) {
             } else if (st.currentTool === 'pointMove') {
                 if (feature.points.length === 1) {
                     // DataStore 側の points, vertexIds を更新
-                    feature.points.forEach((p, i) => {
-                        const vertexId = feature.vertexIds[i];
-                        if (vertexId) {
-                            const vertex = VerticesStore.getById(vertexId);
-                            if (vertex) {
-                                vertex.x = p.x;
-                                vertex.y = p.y;
-                                VerticesStore.updateVertex(vertex);
-                            }
-                        }
-                    });
+                    // feature.points.forEach((p, i) => {
+                    //     const vertexId = feature.vertexIds[i];
+                    //     if(vertexId){
+                    //         const vertex = VerticesStore.getById(vertexId);
+                    //         if (vertex) {
+                    //             vertex.x = p.x;
+                    //             vertex.y = p.y;
+                    //             VerticesStore.updateVertex(vertex);
+                    //         }
+                    //     }
+                    // });
+                    // 代わりに
+                    const vertex = VerticesStore.getById(feature.vertexIds[dData.index]);
+                    if (vertex) {
+                        vertex.x = feature.points[dData.index].x;
+                        vertex.y = feature.points[dData.index].y;
+                        VerticesStore.updateVertex(vertex);
+                    }
+
                     DataStore.updatePoint(feature, false);
                     const action = UndoRedoManager.makeAction(
                         'updatePoint',
@@ -478,11 +519,12 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
 
         // 新しい頂点を挿入
         if (!feature.points) feature.points = [];
-        // const newCoord = { x: dData.dragStartX, y: dData.dragStartY }; // 座標はワールド座標
-        // feature.points.splice(dData.endIndex, 0, newCoord);
+
+        // offsetXを考慮
+        const newCoord = { x: dData.dragStartX - offsetX, y: dData.dragStartY };
 
         // 新しい頂点IDの生成（共有頂点の可能性も考慮）
-        const newVertexId = VerticesStore.createOrGetVertex({ x: dData.dragStartX, y: dData.dragStartY });
+        const newVertexId = VerticesStore.createOrGetVertex(newCoord);
 
         // feature.vertexIds にも新しい頂点IDを挿入
         if (!feature.vertexIds) {
@@ -491,7 +533,10 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
         feature.vertexIds.splice(dData.endIndex, 0, newVertexId);
 
         // feature.points も更新（spliceを使う）
-        const newPoint = { x: dData.dragStartX, y: dData.dragStartY };
+        // const newPoint = { x: dData.dragStartX, y: dData.dragStartY }; // ここもワールド座標
+        const newPoint = {
+            x: newCoord.x, y: newCoord.y
+        }
         feature.points.splice(dData.endIndex, 0, newPoint);
 
         isDraggingFeature = true;
@@ -535,7 +580,10 @@ export function edgeDragged(event, dData) {
             let candidate = simpleCandidate;
 
             // 新規頂点用のスナップ処理（同様にスナップ状態を保持）
-            const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
+            // const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
+            // offsetXを考慮
+            const mouseCoord = { x: transform.invertX(mouseX) - dData.offsetX, y: transform.invertY(mouseY) };
+
             const SNAP_THRESHOLD = 15 / transform.k;
             const allPolygons = DataStore.getPolygons(st.currentYear);
 
@@ -638,8 +686,17 @@ export function edgeDragged(event, dData) {
                 dData.lastValidCandidates[dData.endIndex] = { x: candidate.x, y: candidate.y };
             }
 
-            pt.x = candidate.x;
-            pt.y = candidate.y;
+            // pt.x = candidate.x;
+            // pt.y = candidate.y;
+            // 代わりに
+            const { x, y } = candidate;
+            const newVertexId = VerticesStore.createOrGetVertex({ x, y });
+            feature.vertexIds[dData.endIndex] = newVertexId;
+            const newVertex = VerticesStore.getById(newVertexId);
+            pt.x = newVertex.x;
+            pt.y = newVertex.y;
+
+
         }
 
         if (st.currentTool === 'lineVertexEdit') {
@@ -686,14 +743,15 @@ export function edgeDragEnded(event, dData, feature) {
 
         if (dData._dragged) {
             // 新しい頂点の座標を更新
-            const newVertexId = feature.vertexIds[dData.endIndex];
-            if (newVertexId) {
-                const vertex = VerticesStore.getById(newVertexId);
-                // vertexは必ず存在する
-                vertex.x = feature.points[dData.endIndex].x;
-                vertex.y = feature.points[dData.endIndex].y;
-                VerticesStore.updateVertex(vertex);
-            }
+            // const newVertexId = feature.vertexIds[dData.endIndex];
+            // if (newVertexId) {
+            //     const vertex = VerticesStore.getById(newVertexId);
+            //     // vertexは必ず存在する
+            //     vertex.x = feature.points[dData.endIndex].x;
+            //     vertex.y = feature.points[dData.endIndex].y;
+            //     VerticesStore.updateVertex(vertex);
+            // }
+            // vertexDragEndedと同じ処理なので省略
 
             if (st.currentTool === 'lineVertexEdit') {
                 DataStore.updateLine(feature, false);
