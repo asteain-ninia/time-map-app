@@ -46,6 +46,12 @@ export function removeSelectedVertices() {
         const sortedIndices = selectedVertices.map(v => v.vertexIndex).sort((a, b) => b - a);
         sortedIndices.forEach(idx => {
             if (selectedFeature.points && selectedFeature.points.length > idx) {
+                // 頂点IDも削除
+                if (selectedFeature.vertexIds && selectedFeature.vertexIds.length > idx) {
+                    // 頂点自体は削除せず、関連付けを解除（共有頂点かもしれないので）
+                    // VerticesStore.removeVertex(selectedFeature.vertexIds[idx]);
+                    selectedFeature.vertexIds.splice(idx, 1);
+                }
                 selectedFeature.points.splice(idx, 1);
             }
         });

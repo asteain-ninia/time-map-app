@@ -10,6 +10,7 @@ import { debugLog } from '../../utils/logger.js';
 import UndoRedoManager from '../../utils/undoRedoManager.js';
 import { getFeatureTooltipData } from './selection.js';
 import { polygonsOverlap, pointInPolygon, distancePointToSegment, doLineSegmentsIntersect } from '../../utils/geometryUtils.js';
+import VerticesStore from '../../dataStore/verticesStore.js';
 
 // ===== 追加：自己交差および重なり判定用ヘルパー =====
 function isSelfIntersecting(polygon) {
@@ -361,6 +362,18 @@ export function vertexDragEnded(event, dData, feature) {
         // ドラッグ中に少なくとも1回移動した場合
         if (dData._dragged) {
             if (st.currentTool === 'lineVertexEdit') {
+                // DataStore 側の points, vertexIds を更新
+                feature.points.forEach((p, i) => {
+                    const vertexId = feature.vertexIds[i];
+                    if (vertexId) {
+                        const vertex = VerticesStore.getById(vertexId);
+                        if (vertex) {
+                            vertex.x = p.x;
+                            vertex.y = p.y;
+                            VerticesStore.updateVertex(vertex);
+                        }
+                    }
+                });
                 DataStore.updateLine(feature, false);
                 const action = UndoRedoManager.makeAction(
                     'updateLine',
@@ -370,6 +383,18 @@ export function vertexDragEnded(event, dData, feature) {
                 UndoRedoManager.record(action);
 
             } else if (st.currentTool === 'polygonVertexEdit') {
+                // DataStore 側の points, vertexIds を更新
+                feature.points.forEach((p, i) => {
+                    const vertexId = feature.vertexIds[i];
+                    if (vertexId) {
+                        const vertex = VerticesStore.getById(vertexId);
+                        if (vertex) {
+                            vertex.x = p.x;
+                            vertex.y = p.y;
+                            VerticesStore.updateVertex(vertex);
+                        }
+                    }
+                });
                 DataStore.updatePolygon(feature, false);
                 const action = UndoRedoManager.makeAction(
                     'updatePolygon',
@@ -380,6 +405,18 @@ export function vertexDragEnded(event, dData, feature) {
 
             } else if (st.currentTool === 'pointMove') {
                 if (feature.points.length === 1) {
+                    // DataStore 側の points, vertexIds を更新
+                    feature.points.forEach((p, i) => {
+                        const vertexId = feature.vertexIds[i];
+                        if (vertexId) {
+                            const vertex = VerticesStore.getById(vertexId);
+                            if (vertex) {
+                                vertex.x = p.x;
+                                vertex.y = p.y;
+                                VerticesStore.updateVertex(vertex);
+                            }
+                        }
+                    });
                     DataStore.updatePoint(feature, false);
                     const action = UndoRedoManager.makeAction(
                         'updatePoint',
@@ -441,10 +478,21 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
 
         // 新しい頂点を挿入
         if (!feature.points) feature.points = [];
-        feature.points.splice(dData.endIndex, 0, {
-            x: dData.dragStartX,
-            y: dData.dragStartY
-        });
+        // const newCoord = { x: dData.dragStartX, y: dData.dragStartY }; // 座標はワールド座標
+        // feature.points.splice(dData.endIndex, 0, newCoord);
+
+        // 新しい頂点IDの生成（共有頂点の可能性も考慮）
+        const newVertexId = VerticesStore.createOrGetVertex({ x: dData.dragStartX, y: dData.dragStartY });
+
+        // feature.vertexIds にも新しい頂点IDを挿入
+        if (!feature.vertexIds) {
+            feature.vertexIds = [];
+        }
+        feature.vertexIds.splice(dData.endIndex, 0, newVertexId);
+
+        // feature.points も更新（spliceを使う）
+        const newPoint = { x: dData.dragStartX, y: dData.dragStartY };
+        feature.points.splice(dData.endIndex, 0, newPoint);
 
         isDraggingFeature = true;
 
@@ -635,7 +683,18 @@ export function edgeDragEnded(event, dData, feature) {
             return;
         }
 
+
         if (dData._dragged) {
+            // 新しい頂点の座標を更新
+            const newVertexId = feature.vertexIds[dData.endIndex];
+            if (newVertexId) {
+                const vertex = VerticesStore.getById(newVertexId);
+                // vertexは必ず存在する
+                vertex.x = feature.points[dData.endIndex].x;
+                vertex.y = feature.points[dData.endIndex].y;
+                VerticesStore.updateVertex(vertex);
+            }
+
             if (st.currentTool === 'lineVertexEdit') {
                 DataStore.updateLine(feature, false);
                 const action = UndoRedoManager.makeAction(

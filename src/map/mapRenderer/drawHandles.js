@@ -54,7 +54,8 @@ export function drawVertexHandles(dataGroup, feature) {
                 const adjustedPoints = feature.points.map((p, i) => ({
                     x: p.x + offsetX,
                     y: p.y,
-                    index: i
+                    index: i,
+                    vertexId: feature.vertexIds[i] // 頂点IDを渡す
                 }));
                 const offsetXClass = 'offset_' + Math.round(offsetX);
 
