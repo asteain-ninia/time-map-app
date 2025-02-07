@@ -36,7 +36,7 @@ function causesOverlap(candidatePolygon, selectedFeatureId, currentLayer) {
     for (const poly of allPolygons) {
         if (poly.id === selectedFeatureId) continue;
         if (poly.layerId !== currentLayer) continue;
-        if (polygonsOverlap(candidatePolygon, poly.points)) {
+        if (polygonsOverlap(candidatePolygon, poly.points, selectedFeatureId)) { // Check the third argument (ignore id)
             return true;
         }
     }
@@ -146,6 +146,8 @@ export function vertexDragStarted(event, dData, offsetX, feature) {
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
         dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
+        // dragStartedではdData.offsetXを保存（draggedで現在地との差分を計算するため）
+        dData.offsetX = offsetX;
 
         dragOriginalShape = safeDeepCopy(feature);
 
@@ -173,12 +175,18 @@ export function vertexDragged(event, dData) {
         const transform = d3.zoomTransform(d3.select('#map svg').node());
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
 
-        const dx = transform.invertX(mouseX) - dData.dragStartX;
-        const dy = transform.invertY(mouseY) - dData.dragStartY;
+        // const dx = transform.invertX(mouseX) - dData.dragStartX;
+        // const dy = transform.invertY(mouseY) - dData.dragStartY;
 
-        // 更新後のドラッグ開始位置を更新
-        dData.dragStartX = transform.invertX(mouseX);
+        // // 更新後のドラッグ開始位置を更新
+        // dData.dragStartX = transform.invertX(mouseX);
+        // dData.dragStartY = transform.invertY(mouseY);
+        // 代わりにoffsetXを利用
+        const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
+        const dy = (transform.invertY(mouseY)) - dData.dragStartY;
+        dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
         dData.dragStartY = transform.invertY(mouseY);
+
 
         const st = stateManager.getState();
         const { selectedFeature } = st;
@@ -511,8 +519,13 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
 
         const transform = d3.zoomTransform(d3.select('#map svg').node());
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
-        dData.dragStartX = transform.invertX(mouseX);
+        // dData.dragStartX = transform.invertX(mouseX);
+        // dData.dragStartY = transform.invertY(mouseY);
+        // 代わりに
+        dData.dragStartX = transform.invertX(mouseX) - offsetX;
         dData.dragStartY = transform.invertY(mouseY);
+        dData.offsetX = offsetX;
+
 
         // バックアップ
         dragOriginalShape = safeDeepCopy(feature);
@@ -521,7 +534,7 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
         if (!feature.points) feature.points = [];
 
         // offsetXを考慮
-        const newCoord = { x: dData.dragStartX - offsetX, y: dData.dragStartY };
+        const newCoord = { x: dData.dragStartX, y: dData.dragStartY };
 
         // 新しい頂点IDの生成（共有頂点の可能性も考慮）
         const newVertexId = VerticesStore.createOrGetVertex(newCoord);
@@ -534,9 +547,9 @@ export function edgeDragStarted(event, dData, offsetX, feature) {
 
         // feature.points も更新（spliceを使う）
         // const newPoint = { x: dData.dragStartX, y: dData.dragStartY }; // ここもワールド座標
-        const newPoint = {
-            x: newCoord.x, y: newCoord.y
-        }
+        // 代わりに
+        const newPoint = { x: newCoord.x, y: newCoord.y };
+
         feature.points.splice(dData.endIndex, 0, newPoint);
 
         isDraggingFeature = true;
@@ -562,10 +575,15 @@ export function edgeDragged(event, dData) {
         const transform = d3.zoomTransform(d3.select('#map svg').node());
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
 
-        const dx = transform.invertX(mouseX) - dData.dragStartX;
-        const dy = transform.invertY(mouseY) - dData.dragStartY;
+        // const dx = transform.invertX(mouseX) - dData.dragStartX;
+        // const dy = transform.invertY(mouseY) - dData.dragStartY;
 
-        dData.dragStartX = transform.invertX(mouseX);
+        // dData.dragStartX = transform.invertX(mouseX);
+        // dData.dragStartY = transform.invertY(mouseY);
+        // 代わりに
+        const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
+        const dy = (transform.invertY(mouseY)) - dData.dragStartY;
+        dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
         dData.dragStartY = transform.invertY(mouseY);
 
         const st = stateManager.getState();
@@ -780,6 +798,7 @@ export function edgeDragEnded(event, dData, feature) {
         }
         delete dData.dragStartX;
         delete dData.dragStartY;
+        delete dData.offsetX;
         delete dData._dragged;
         dragOriginalShape = null;
     } catch (error) {

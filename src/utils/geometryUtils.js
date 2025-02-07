@@ -47,12 +47,22 @@ export function polygonEdges(polygon) {
  * ※ 現状は多角形の外周（pointsプロパティ）のみで判定し、holesは考慮しません。
  * @param {Array} poly1 - {x, y}オブジェクトの配列（多角形１の外周）
  * @param {Array} poly2 - {x, y}オブジェクトの配列（多角形２の外周）
+ * @param {String} ignoreId - 無視するポリゴンID
  * @returns {boolean} - 重なっているなら true、そうでなければ false
  */
-export function polygonsOverlap(poly1, poly2) {
+export function polygonsOverlap(poly1, poly2, ignoreId = null) {
     if (!poly1 || poly1.length < 3 || !poly2 || poly2.length < 3) {
         return false;
     }
+
+    // ignoreIdが設定されていて、かつpoly1かpoly2のいずれかのIDがignoreIdと一致する場合は、
+    // 重なっていないとみなす
+    if (ignoreId) {
+        if (poly1.id === ignoreId || poly2.id === ignoreId) {
+            return false;
+        }
+    }
+
 
     // １．各多角形の辺同士で交差があるかどうかをチェック
     const edges1 = polygonEdges(poly1);
@@ -96,7 +106,6 @@ export function pointInPolygon(point, polygon) {
 }
 
 /****************************************************
- * [新規追加]
  * 点と線分間の最小距離を計算する関数。
  * @param {Object} point - {x, y}のオブジェクト
  * @param {Object} A - 線分始点 {x, y}
