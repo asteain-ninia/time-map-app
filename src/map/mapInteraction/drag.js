@@ -182,9 +182,14 @@ export function vertexDragged(event, dData) {
         // dData.dragStartX = transform.invertX(mouseX);
         // dData.dragStartY = transform.invertY(mouseY);
         // 代わりにoffsetXを利用
-        const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
+        // const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
+        // const dy = (transform.invertY(mouseY)                ) - dData.dragStartY;
+        // dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
+        // dData.dragStartY = transform.invertY(mouseY);
+        // さらに変更。オフセット分を戻さない
+        const dx = (transform.invertX(mouseX)) - dData.dragStartX;
         const dy = (transform.invertY(mouseY)) - dData.dragStartY;
-        dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
+        dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
 
 
@@ -486,6 +491,7 @@ export function vertexDragEnded(event, dData, feature) {
         }
         delete dData.dragStartX;
         delete dData.dragStartY;
+        delete dData.offsetX
         delete dData._dragged;
         dragOriginalShape = null;
 
@@ -581,10 +587,16 @@ export function edgeDragged(event, dData) {
         // dData.dragStartX = transform.invertX(mouseX);
         // dData.dragStartY = transform.invertY(mouseY);
         // 代わりに
-        const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
+        // const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
+        // const dy = (transform.invertY(mouseY)                ) - dData.dragStartY;
+        // dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
+        // dData.dragStartY = transform.invertY(mouseY);
+        // さらに変更。オフセット分を戻さない
+        const dx = (transform.invertX(mouseX)) - dData.dragStartX;
         const dy = (transform.invertY(mouseY)) - dData.dragStartY;
-        dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
+        dData.dragStartX = transform.invertX(mouseX);
         dData.dragStartY = transform.invertY(mouseY);
+
 
         const st = stateManager.getState();
         const feature = st.selectedFeature;

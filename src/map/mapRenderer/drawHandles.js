@@ -19,7 +19,7 @@ import { colorScheme } from './index.js';
 
 // 面情報ストアから全面情報を取得するためのインポート
 import PolygonsStore from '../../dataStore/polygonsStore.js';
-import VerticesStore from '../../dataStore/verticesStore.js';
+// import VerticesStore from '../../dataStore/verticesStore.js'; // 不要なので削除
 
 /**
  * 頂点ハンドル表示
@@ -28,16 +28,6 @@ import VerticesStore from '../../dataStore/verticesStore.js';
  */
 export function drawVertexHandles(dataGroup, feature) {
     debugLog(4, `drawVertexHandles() が呼び出されました。feature.id=${feature?.id}`);
-
-    /**
-     * 2つの頂点が十分に近いかどうかを、現在のズームレベルと閾値を用いて判定する関数
-     */
-    function isCloseEnough(v1, v2, zoomLevel) {
-        const threshold = VerticesStore.getSharedThreshold() / zoomLevel;
-        const dx = v1.x - v2.x;
-        const dy = v1.y - v2.y;
-        return Math.sqrt(dx * dx + dy * dy) <= threshold;
-    }
 
     try {
         if (!feature.points || feature.points.length < 1) {
@@ -86,19 +76,21 @@ export function drawVertexHandles(dataGroup, feature) {
                         const vertexId = feature.vertexIds[d.index];
                         // 共有判定：対象面以外の面情報で同じ vertexId を持つものがあれば共有とみなす
                         let isShared = false;
-                        const vertex = VerticesStore.getById(vertexId);
+                        // const vertex = VerticesStore.getById(vertexId); // 不要
                         allPolygonsCurrentYear.forEach(poly => { // Changed
                             if (poly.id !== feature.id && poly.vertexIds && poly.vertexIds.includes(vertexId)) {
-                                // 追加：距離の判定
-                                for (const otherVertexId of poly.vertexIds) {
-                                    if (vertexId === otherVertexId) continue;
-                                    const otherVertex = VerticesStore.getById(otherVertexId);
-                                    if (otherVertex && isCloseEnough(vertex, otherVertex, k)) {
-                                        isShared = true;
-                                        break;
-                                    }
+                                // // 追加：距離の判定
+                                // for(const otherVertexId of poly.vertexIds){
+                                //     if(vertexId === otherVertexId) continue;
+                                //     const otherVertex = VerticesStore.getById(otherVertexId);
+                                //     if (otherVertex && isCloseEnough(vertex, otherVertex, k)) {
+                                //         isShared = true;
+                                //         break;
+                                //     }
 
-                                }
+                                // }
+                                // 距離の判定は不要
+                                isShared = true;
                             }
                         });
                         const isSelected = selectedVertices.some(v => v.featureId === feature.id && v.vertexIndex === d.index);
