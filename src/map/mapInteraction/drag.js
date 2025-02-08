@@ -175,23 +175,17 @@ export function vertexDragged(event, dData) {
         const transform = d3.zoomTransform(d3.select('#map svg').node());
         const [mouseX, mouseY] = d3.pointer(event, d3.select('#map svg').node());
 
-        // const dx = transform.invertX(mouseX) - dData.dragStartX;
-        // const dy = transform.invertY(mouseY) - dData.dragStartY;
+        // offsetXを考慮したワールド座標でのマウス位置
+        const worldMouseX = transform.invertX(mouseX) - dData.offsetX;
+        const worldMouseY = transform.invertY(mouseY);
 
-        // // 更新後のドラッグ開始位置を更新
-        // dData.dragStartX = transform.invertX(mouseX);
-        // dData.dragStartY = transform.invertY(mouseY);
-        // 代わりにoffsetXを利用
-        // const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
-        // const dy = (transform.invertY(mouseY)                ) - dData.dragStartY;
-        // dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
-        // dData.dragStartY = transform.invertY(mouseY);
-        // さらに変更。オフセット分を戻さない
-        const dx = (transform.invertX(mouseX)) - dData.dragStartX;
-        const dy = (transform.invertY(mouseY)) - dData.dragStartY;
-        dData.dragStartX = transform.invertX(mouseX);
-        dData.dragStartY = transform.invertY(mouseY);
+        // dx, dyの計算（ワールド座標）
+        const dx = worldMouseX - dData.dragStartX;
+        const dy = worldMouseY - dData.dragStartY;
 
+        // ドラッグ開始位置の更新（ワールド座標）
+        dData.dragStartX = worldMouseX;
+        dData.dragStartY = worldMouseY;
 
         const st = stateManager.getState();
         const { selectedFeature } = st;
@@ -205,12 +199,10 @@ export function vertexDragged(event, dData) {
         let candidate = simpleCandidate;
 
         // 現在のマウス座標
-        // const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
-        // offsetXを考慮
-        const mouseCoord = { x: transform.invertX(mouseX) - dData.offsetX, y: transform.invertY(mouseY) };
+        const mouseCoord = { x: worldMouseX, y: worldMouseY };
 
         // スナップ処理
-        const SNAP_THRESHOLD = 15 / transform.k;
+        const SNAP_THRESHOLD = 15 / transform.k; // スケールに依存
         const allPolygons = DataStore.getPolygons(st.currentYear);
 
         // 既にスナップ状態がある場合は、その対象ポリゴン内にマウスが留まっているか確認
@@ -239,7 +231,7 @@ export function vertexDragged(event, dData) {
                     dData.snapCandidate = null;
                     dData.snapEdgeA = null;
                     dData.snapEdgeB = null;
-                    candidate = simpleCandidate;
+                    candidate = simpleCandidate; // スナップ解除
                 }
             } else {
                 // マウスがスナップ対象ポリゴンから外れている場合は、スナップ状態をクリアして単純候補を採用
@@ -247,9 +239,10 @@ export function vertexDragged(event, dData) {
                 dData.snapCandidate = null;
                 dData.snapEdgeA = null;
                 dData.snapEdgeB = null;
-                candidate = simpleCandidate;
+                candidate = simpleCandidate; // スナップ解除
             }
         }
+
         // スナップ状態が未設定の場合は、新たにスナップ候補を計算する
         if (!dData.snapPolygonId) {
             let bestSnapCandidate = null;
@@ -257,42 +250,49 @@ export function vertexDragged(event, dData) {
             let bestPolyId = null;
             let bestEdgeA = null;
             let bestEdgeB = null;
+
             for (const poly of allPolygons) {
-                if (poly.id === selectedFeature.id) continue;
-                if (!poly.points || poly.points.length < 2) continue;
-                // マウス座標が対象ポリゴン内にあるかどうかを確認
-                if (!pointInPolygon(mouseCoord, poly.points)) continue;
+                if (poly.id === selectedFeature.id) continue; // 自分自身は除外
+                if (!poly.points || poly.points.length < 2) continue; // 頂点数が足りない場合は除外
+
+                // ポリゴンの内部判定 *後* に、エッジとの距離を計算
+                if (!pointInPolygon(mouseCoord, poly.points)) continue; // ポリゴンの外側ならスキップ
+
                 for (let j = 0; j < poly.points.length; j++) {
                     const A = poly.points[j];
-                    const B = poly.points[(j + 1) % poly.points.length];
+                    const B = poly.points[(j + 1) % poly.points.length]; // Aの次の点がB
+
+                    // 投影点の計算
                     const ABx = B.x - A.x;
                     const ABy = B.y - A.y;
                     const len2 = ABx * ABx + ABy * ABy;
                     let t = 0;
-                    if (len2 > 0) {
+                    if (len2 > 0) { // 0除算を避ける
                         t = ((mouseCoord.x - A.x) * ABx + (mouseCoord.y - A.y) * ABy) / len2;
-                        if (t < 0) t = 0;
-                        if (t > 1) t = 1;
+                        if (t < 0) t = 0; // クランプ
+                        if (t > 1) t = 1; // クランプ
                     }
-                    const proj = { x: A.x + t * ABx, y: A.y + t * ABy };
-                    const dxSeg = mouseCoord.x - proj.x;
-                    const dySeg = mouseCoord.y - proj.y;
-                    const dist = Math.sqrt(dxSeg * dxSeg + dySeg * dySeg);
+                    const proj = { x: A.x + t * ABx, y: A.y + t * ABy }; // Aからt倍の位置が投影点
+
+                    const dx = mouseCoord.x - proj.x;
+                    const dy = mouseCoord.y - proj.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
                     if (dist < SNAP_THRESHOLD && dist < bestSnapDistance) {
                         bestSnapDistance = dist;
                         bestSnapCandidate = proj;
-                        bestPolyId = poly.id;
-                        bestEdgeA = A;
-                        bestEdgeB = B;
+                        bestPolyId = poly.id; // ポリゴンを特定
+                        bestEdgeA = A; // スナップエッジ
+                        bestEdgeB = B; // スナップエッジ
                     }
                 }
             }
             if (bestSnapCandidate) {
                 candidate = bestSnapCandidate;
                 dData.snapPolygonId = bestPolyId;
-                dData.snapCandidate = bestSnapCandidate;
-                dData.snapEdgeA = bestEdgeA;
-                dData.snapEdgeB = bestEdgeB;
+                dData.snapCandidate = bestSnapCandidate; // スナップ位置も保持
+                dData.snapEdgeA = bestEdgeA; // スナップエッジも保持
+                dData.snapEdgeB = bestEdgeB; // スナップエッジも保持
             }
         }
 
@@ -308,14 +308,14 @@ export function vertexDragged(event, dData) {
             if (dData.lastValidCandidates && dData.lastValidCandidates[dData.index]) {
                 candidate = dData.lastValidCandidates[dData.index];
             } else {
-                candidate = selectedFeature.points[dData.index];
+                candidate = selectedFeature.points[dData.index]; // 現在の点に戻す
             }
         } else if (causesOverlap(candidatePolygon, selectedFeature.id, selectedFeature.layerId)) {
             debugLog(3, '候補の頂点移動により同一レイヤー内で面情報が重なってしまうため、前の有効候補に戻します。');
             if (dData.lastValidCandidates && dData.lastValidCandidates[dData.index]) {
                 candidate = dData.lastValidCandidates[dData.index];
             } else {
-                candidate = selectedFeature.points[dData.index];
+                candidate = selectedFeature.points[dData.index]; // 現在の点に戻す
             }
         } else {
             dData.lastValidCandidates[dData.index] = { x: candidate.x, y: candidate.y };
@@ -587,16 +587,14 @@ export function edgeDragged(event, dData) {
         // dData.dragStartX = transform.invertX(mouseX);
         // dData.dragStartY = transform.invertY(mouseY);
         // 代わりに
-        // const dx = (transform.invertX(mouseX) - dData.offsetX) - dData.dragStartX;
-        // const dy = (transform.invertY(mouseY)                ) - dData.dragStartY;
-        // dData.dragStartX = transform.invertX(mouseX) - dData.offsetX;
-        // dData.dragStartY = transform.invertY(mouseY);
-        // さらに変更。オフセット分を戻さない
-        const dx = (transform.invertX(mouseX)) - dData.dragStartX;
-        const dy = (transform.invertY(mouseY)) - dData.dragStartY;
-        dData.dragStartX = transform.invertX(mouseX);
-        dData.dragStartY = transform.invertY(mouseY);
+        // offsetXを考慮
+        const worldMouseX = transform.invertX(mouseX) - dData.offsetX;
+        const worldMouseY = transform.invertY(mouseY);
+        const dx = worldMouseX - dData.dragStartX;
+        const dy = worldMouseY - dData.dragStartY;
 
+        dData.dragStartX = worldMouseX;
+        dData.dragStartY = worldMouseY;
 
         const st = stateManager.getState();
         const feature = st.selectedFeature;
@@ -612,7 +610,7 @@ export function edgeDragged(event, dData) {
             // 新規頂点用のスナップ処理（同様にスナップ状態を保持）
             // const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
             // offsetXを考慮
-            const mouseCoord = { x: transform.invertX(mouseX) - dData.offsetX, y: transform.invertY(mouseY) };
+            const mouseCoord = { x: worldMouseX, y: worldMouseY };
 
             const SNAP_THRESHOLD = 15 / transform.k;
             const allPolygons = DataStore.getPolygons(st.currentYear);
