@@ -12,7 +12,8 @@ ignore_files = ['package.json', 'package-lock.json']
 # カレントディレクトリのみで無視するファイル
 ignore_files_in_current_dir = ['テスト項目.md']  
 
-src_dir = 'src'  # ソースコードのルートディレクトリ
+# ソースコードのルートディレクトリ
+src_dirs = ['src', 'styles']
 
 # コマンドライン引数から拡張子を取得（デフォルトはdefault_extensions）
 extensions = [f'.{arg}' for arg in sys.argv[1:]] if len(sys.argv) > 1 else default_extensions
@@ -28,8 +29,12 @@ def write_file_content(outfile, file_path):
     relative_path = os.path.relpath(file_path, start='.')
     processed_files.append(relative_path)  # 処理対象ファイルをリストに追加
     outfile.write(f"\n--- Start of {relative_path} ---\n\n")
-    with open(file_path, 'r', encoding='utf-8') as infile:
-        outfile.write(infile.read())
+    try:
+        with open(file_path, 'r', encoding='utf-8') as infile:
+            outfile.write(infile.read())
+    except UnicodeDecodeError:
+        # UTF-8でデコードできない場合はスキップし、警告を表示
+        print(f"Warning: Could not decode file with UTF-8 encoding: {file_path}. Skipping...")
     outfile.write(f"\n\n--- End of {relative_path} ---\n")
 
 def process_directory(dir_path, outfile):
@@ -55,17 +60,18 @@ def process_files_in_current_dir(outfile):
         for file_path in glob.glob(f'*{ext}'):
             base_name = os.path.basename(file_path)
             if (
-                os.path.isfile(file_path) 
-                and base_name not in ignore_files            # グローバル除外
+                os.path.isfile(file_path)
+                and base_name not in ignore_files  # グローバル除外
                 and base_name not in ignore_files_in_current_dir  # カレントのみ除外
             ):
                 write_file_content(outfile, file_path)
 
 # 出力ファイルを生成して結合処理を実行
 with open(output_file, 'w', encoding='utf-8') as outfile:
-    # srcディレクトリ内のファイルを処理
-    if os.path.isdir(src_dir):
-        process_directory(src_dir, outfile)
+    # src_dirs 内のディレクトリを処理
+    for src_dir in src_dirs:
+        if os.path.isdir(src_dir):
+            process_directory(src_dir, outfile)
     # カレントディレクトリ内のファイルを処理
     process_files_in_current_dir(outfile)
 
