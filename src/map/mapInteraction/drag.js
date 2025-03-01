@@ -42,7 +42,6 @@ function causesOverlap(candidatePolygon, selectedFeatureId, currentLayer) {
     }
     return false;
 }
-// ===== ここまで追加 =====
 
 let dragOriginalShape = null; // ドラッグ前の形状を保持するための変数
 let isDraggingFeature = false; // ドラッグ中かどうかのフラグ
@@ -553,8 +552,6 @@ export function edgeDragged(event, dData) {
             const simpleCandidate = { x: pt.x + dx, y: pt.y + dy };
             let candidate = simpleCandidate;
 
-            // 新規頂点用のスナップ処理（同様にスナップ状態を保持）
-            // const mouseCoord = { x: transform.invertX(mouseX), y: transform.invertY(mouseY) };
             // offsetXを考慮
             const mouseCoord = { x: worldMouseX, y: worldMouseY };
 
@@ -660,9 +657,6 @@ export function edgeDragged(event, dData) {
                 dData.lastValidCandidates[dData.endIndex] = { x: candidate.x, y: candidate.y };
             }
 
-            // pt.x = candidate.x;
-            // pt.y = candidate.y;
-            // 代わりに
             const { x, y } = candidate;
             const newVertexId = VerticesStore.createOrGetVertex({ x, y });
             feature.vertexIds[dData.endIndex] = newVertexId;
@@ -716,17 +710,6 @@ export function edgeDragEnded(event, dData, feature) {
 
 
         if (dData._dragged) {
-            // 新しい頂点の座標を更新
-            // const newVertexId = feature.vertexIds[dData.endIndex];
-            // if (newVertexId) {
-            //     const vertex = VerticesStore.getById(newVertexId);
-            //     // vertexは必ず存在する
-            //     vertex.x = feature.points[dData.endIndex].x;
-            //     vertex.y = feature.points[dData.endIndex].y;
-            //     VerticesStore.updateVertex(vertex);
-            // }
-            // vertexDragEndedと同じ処理なので省略
-
             if (st.currentTool === 'lineVertexEdit') {
                 DataStore.updateLine(feature, false);
                 const action = UndoRedoManager.makeAction(
